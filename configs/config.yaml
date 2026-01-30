@@ -1,0 +1,26 @@
+http:
+  host: "0.0.0.0"
+  port: 8080
+
+clickhouse:
+  database: "logs_db"
+  user: "default"
+  password: "password"
+  hosts:
+    - "ch1:9440"
+    - "ch2:9440"
+    - "ch3:9440"
+
+rabbitmq:
+  brokers:
+    - "rmq1:5672"
+    - "rmq2:5672"
+    - "rmq3:5672"
+  username: "guest"
+  password: "guest"
+  queue_name: "log-entries"
+  prefetch_count: 10
+
+metrics:
+  host: "0.0.0.0"
+  port: 8081

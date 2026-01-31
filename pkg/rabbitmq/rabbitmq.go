@@ -15,29 +15,31 @@ type RabbitConsumer struct {
 	handlerFunc rabbitmq.Handler
 }
 
-type MessageHandler func(rabbitmq.Delivery) rabbitmq.Action
-
-func NewRabbitConsumer(cfg config.RabbitMQ) *RabbitConsumer {
-	return &RabbitConsumer{
-		config: cfg,
-	}
+// Error implements [error].
+func (r *RabbitConsumer) Error() string {
+	panic("unimplemented")
 }
 
-func (r *RabbitConsumer) Connect() error {
-	uris := make([]string, len(r.config.Brokers))
-	for i, broker := range r.config.Brokers {
-		uris[i] = fmt.Sprintf("amqp://%s:%s@%s", r.config.Username, r.config.Password, broker)
+type MessageHandler func(rabbitmq.Delivery) rabbitmq.Action
+
+func New(cfg config.RabbitMQ) (*RabbitConsumer, error) {
+	uris := make([]string, len(cfg.Brokers))
+	for i, broker := range cfg.Brokers {
+		uris[i] = fmt.Sprintf("amqp://%s:%s@%s", cfg.Username, cfg.Password, broker)
 	}
 
 	resolver := rabbitmq.NewStaticResolver(uris, false)
 
 	conn, err := rabbitmq.NewClusterConn(resolver, rabbitmq.WithConnectionOptionsLogging)
 	if err != nil {
-		return fmt.Errorf("failed to connect to rabbitmq: %w", err)
+		return nil, fmt.Errorf("failed to connect to rabbitmq: %w", err)
 	}
-	r.conn = conn
-	log.Printf("Connected to RabbitMQ cluster")
-	return nil
+	return &RabbitConsumer{
+		conn:        conn,
+		config:      cfg,
+		consumer:    nil,
+		handlerFunc: nil,
+	}, nil
 }
 
 func (r *RabbitConsumer) DeclareExchange() error {
@@ -97,10 +99,7 @@ func (r *RabbitConsumer) Close() error {
 		r.consumer.Close()
 	}
 	if r.conn != nil {
-		if err := r.conn.Close(); err != nil {
-			return fmt.Errorf("failed to close rabbitmq connection: %w", err)
-		}
+		return r.conn.Close()
 	}
-	log.Printf("RabbitMQ connection closed")
 	return nil
 }

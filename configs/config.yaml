@@ -13,9 +13,9 @@ clickhouse:
 
 rabbitmq:
   brokers:
-    - "rmq1:5672"
-    - "rmq2:5672"
-    - "rmq3:5672"
+    - "127.0.0.1:5672"
+    - "127.0.0.1:5673"
+    - "127.0.0.1:5674"
   username: "guest"
   password: "guest"
   queue_name: "log-entries"

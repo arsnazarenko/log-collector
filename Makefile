@@ -2,13 +2,13 @@ BUILD_DIR = build
 COLLECTOR_CMD = cmd/collector/main.go
 GENERATOR_CMD = cmd/generator/main.go
 
-all: generate-api generate-swagger build build-generator
+all: generate-swagger generate-api build build-generator
+
+generate-swagger: api/openapi/v1/api.yaml
+	docker run --rm -i yousan/swagger-yaml-to-html < api/openapi/v1/api.yaml > api/openapi/v1/gen/index.html
 
 generate-api: api/openapi/v1/api.yaml
 	go generate ./api/...
-
-generate-swagger: api/openapi/v1/api.yaml
-	docker run --rm -i yousan/swagger-yaml-to-html < api/openapi/v1/api.yaml > api/openapi/v1/index.html
 
 test:
 	go test -v -cover ./...
@@ -25,8 +25,6 @@ run: build
 	./build/main
 
 clean:
-	rm -rf ./build
+	rm -rf ./build ./api/openapi/v1/api.gen.go ./api/openapi/v1/gen/index.html
 
 .PHONY: all generate-api generate-swagger test clean build build-generator run clean
-
-

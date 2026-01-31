@@ -1,0 +1,60 @@
+services:
+  rmq1:
+    image: rabbitmq:4.2.3-management-alpine
+    container_name: rmq1
+    hostname: rmq1
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    environment:
+      RABBITMQ_DEFAULT_USER: guest
+      RABBITMQ_DEFAULT_PASS: guest
+      RABBITMQ_ERLANG_COOKIE: log-collector-cookie
+    volumes:
+      - ./rabbitmq/rmq-data/rmq1:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "check_running"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  rmq2:
+    image: rabbitmq:4.2.3-management-alpine
+    container_name: rmq2
+    hostname: rmq2
+    ports:
+      - "5673:5672"
+      - "15673:15672"
+    environment:
+      RABBITMQ_DEFAULT_USER: guest
+      RABBITMQ_DEFAULT_PASS: guest
+      RABBITMQ_ERLANG_COOKIE: log-collector-cookie
+    volumes:
+      - ./rabbitmq/rmq-data/rmq2:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "check_running"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  rmq3:
+    image: rabbitmq:4.2.3-management-alpine
+    container_name: rmq3
+    hostname: rmq3
+    ports:
+      - "5674:5672"
+      - "15674:15672"
+    environment:
+      RABBITMQ_DEFAULT_USER: guest
+      RABBITMQ_DEFAULT_PASS: guest
+      RABBITMQ_ERLANG_COOKIE: log-collector-cookie
+    volumes:
+      - ./rabbitmq/rmq-data/rmq3:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "check_running"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s

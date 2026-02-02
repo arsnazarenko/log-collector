@@ -63,11 +63,11 @@ services:
     image: clickhouse/clickhouse-server:26.1-alpine
     container_name: ch1
     hostname: ch1
-    restart: on-failure:10
+    restart: always
     environment:
       CLICKHOUSE_USER: default
       CLICKHOUSE_PASSWORD: default
-      CLICKHOUSE_DB: logs_db
+      CLICKHOUSE_DB: default
     volumes:
       - ./clickhouse/config.xml:/etc/clickhouse-server/config.d/local.xml
       - ./clickhouse/macro1.xml:/etc/clickhouse-server/config.d/macros.xml
@@ -85,11 +85,11 @@ services:
     image: clickhouse/clickhouse-server:26.1-alpine
     container_name: ch2
     hostname: ch2
-    restart: on-failure:10
+    restart: always
     environment:
       CLICKHOUSE_USER: default
       CLICKHOUSE_PASSWORD: default
-      CLICKHOUSE_DB: logs_db
+      CLICKHOUSE_DB: default
     volumes:
       - ./clickhouse/config.xml:/etc/clickhouse-server/config.d/local.xml
       - ./clickhouse/macro2.xml:/etc/clickhouse-server/config.d/macros.xml
@@ -110,11 +110,11 @@ services:
     image: clickhouse/clickhouse-server:26.1-alpine
     container_name: ch3
     hostname: ch3
-    restart: on-failure:10
+    restart: always
     environment:
       CLICKHOUSE_USER: default
       CLICKHOUSE_PASSWORD: default
-      CLICKHOUSE_DB: logs_db
+      CLICKHOUSE_DB: default
     volumes:
       - ./clickhouse/config.xml:/etc/clickhouse-server/config.d/local.xml
       - ./clickhouse/macro3.xml:/etc/clickhouse-server/config.d/macros.xml
@@ -131,4 +131,34 @@ services:
     depends_on:
       ch1:
         condition: service_started
+
+  collector:
+    build:
+      context: .
+      dockerfile: Dockerfile.collector
+    container_name: collector
+    hostname: collector
+    restart: always
+    environment:
+       COLLECTOR_CONFIG_PATH: /etc/collector/config.yaml
+       # variables from can be overrided
+       HTTP_PORT: 8080
+    volumes:
+      - ./configs/config.yaml:/etc/collector/config.yaml:ro
+    ports:
+      - '8080:8080'
+    depends_on:
+      ch1:
+        condition: service_started
+      ch2:
+        condition: service_started
+      ch3:
+        condition: service_started
+      rmq1:
+        condition: service_started
+      rmq2:
+        condition: service_started
+      rmq3:
+        condition: service_started
+
 

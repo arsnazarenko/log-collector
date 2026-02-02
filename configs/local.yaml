@@ -1,5 +1,5 @@
 http:
-  host: "0.0.0.0"
+  host: "127.0.0.1"
   port: 8080
 
 clickhouse:
@@ -7,9 +7,9 @@ clickhouse:
   user: "default"
   password: "default"
   hosts:
-    - "ch1:9000"
-    - "ch2:9000"
-    - "ch3:9000"
+    - "localhost:9000"
+    - "localhost:9001"
+    - "localhost:9002"
 
 rabbitmq:
   username: "guest"
@@ -17,7 +17,7 @@ rabbitmq:
   queue_name: "log-entries"
   prefetch_count: 10
   brokers:
-    - "rmq1:5672"
-    - "rmq2:5672"
-    - "rmq3:5672"
+    - "localhost:5672"
+    - "localhost:5673"
+    - "localhost:5674"
 

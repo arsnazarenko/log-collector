@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"flag"
 	"log"
 	"net"
 	"net/http"
@@ -24,8 +25,22 @@ import (
 	"github.com/wagslane/go-rabbitmq"
 )
 
+func getConfigPath() string {
+	const defaultConfigPath = "/etc/collector/config.yaml"
+	const configEnvVariable = "COLLECTOR_CONFIG_PATH"
+
+	configPath := flag.String("config", defaultConfigPath, "Path to configuration file")
+	flag.Parse()
+	if envPath := os.Getenv(configEnvVariable); envPath != "" {
+		*configPath = envPath
+	}
+	return *configPath
+}
+
 func Run() {
-	cfg, err := config.NewConfig()
+	configPath := getConfigPath()
+	log.Printf("Load config from: %s", configPath)
+	cfg, err := config.NewConfig(configPath)
 	if err != nil {
 		log.Fatal(err)
 	}

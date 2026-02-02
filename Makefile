@@ -24,6 +24,12 @@ build-generator:
 run: build
 	./build/main
 
+docker-run:
+	docker compose up -d --build
+
+docker-stop:
+	docker compose down
+
 clean:
 	rm -rf ./build ./api/openapi/v1/api.gen.go ./api/openapi/v1/gen/index.html
 

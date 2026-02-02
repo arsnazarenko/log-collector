@@ -19,6 +19,7 @@ import (
 	oapi_middleware "github.com/oapi-codegen/nethttp-middleware"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 
+	"github.com/arsnazarenko/log-collector/pkg/clickhouse"
 	rmq_consumer "github.com/arsnazarenko/log-collector/pkg/rabbitmq"
 	"github.com/wagslane/go-rabbitmq"
 )
@@ -96,6 +97,14 @@ func Run() {
 		defer cancel()
 		rmq.Close()
 		s.Shutdown(ctx)
+	}()
+
+	ch, err := clickhouse.New(cfg.Clickhouse)
+	if err != nil {
+		log.Fatalf("Error connecting to clickhouse: %s", err)
+	}
+	defer func() {
+		ch.Close()
 	}()
 
 	log.Printf("Server started on port %s", cfg.HTTP.Port)

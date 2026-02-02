@@ -5,17 +5,17 @@ http:
 clickhouse:
   database: "logs_db"
   user: "default"
-  password: "password"
+  password: "default"
   hosts:
-    - "ch1:9440"
-    - "ch2:9440"
-    - "ch3:9440"
+    - "localhost:9000"
+    - "localhost:9001"
+    - "localhost:9002"
 
 rabbitmq:
   brokers:
-    - "127.0.0.1:5672"
-    - "127.0.0.1:5673"
-    - "127.0.0.1:5674"
+    - "localhost:5672"
+    - "localhost:5673"
+    - "localhost:5674"
   username: "guest"
   password: "guest"
   queue_name: "log-entries"

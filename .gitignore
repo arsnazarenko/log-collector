@@ -1,3 +1,4 @@
 build/
 AGENTS.md
 rabbitmq/rmq-data/
+clickhouse/ch-data/

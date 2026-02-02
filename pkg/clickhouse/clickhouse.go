@@ -2,7 +2,7 @@ package clickhouse
 
 import (
 	"context"
-	"crypto/tls"
+	// "crypto/tls"
 	"fmt"
 
 	"github.com/ClickHouse/clickhouse-go/v2"
@@ -33,9 +33,9 @@ func New(cfg config.Clickhouse) (*Clickhouse, error) {
 				},
 			},
 			ConnOpenStrategy: clickhouse.ConnOpenRoundRobin,
-			TLS: &tls.Config{
-				InsecureSkipVerify: true,
-			},
+			// TLS: &tls.Config{
+			// 	InsecureSkipVerify: true,
+			// },
 		})
 	)
 

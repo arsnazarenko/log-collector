@@ -14,6 +14,7 @@ import (
 	"github.com/arsnazarenko/log-collector/api/openapi/v1/gen"
 	"github.com/arsnazarenko/log-collector/internal/config"
 	v1 "github.com/arsnazarenko/log-collector/internal/controller/http/v1"
+	"github.com/arsnazarenko/log-collector/internal/repo/persistent"
 	"github.com/go-chi/chi/middleware"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/cors"
@@ -101,7 +102,7 @@ func Run() {
 
 	s := &http.Server{
 		Handler: r,
-		Addr:    net.JoinHostPort(cfg.HTTP.Host, cfg.HTTP.Port),
+		Addr:    net.JoinHostPort(cfg.Host, cfg.Port),
 	}
 
 	go func() {
@@ -118,10 +119,12 @@ func Run() {
 	if err != nil {
 		log.Fatalf("Error connecting to clickhouse: %s", err)
 	}
+	logRepo := persistent.NewLogClickhouseRepo(ch)
+	_ = logRepo
 	defer func() {
 		ch.Close()
 	}()
 
-	log.Printf("Server started on port %s", cfg.HTTP.Port)
+	log.Printf("Server started on port %s", cfg.Port)
 	log.Fatal(s.ListenAndServe())
 }

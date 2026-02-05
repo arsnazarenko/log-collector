@@ -2,7 +2,6 @@ package clickhouse
 
 import (
 	"context"
-	// "crypto/tls"
 	"fmt"
 
 	"github.com/ClickHouse/clickhouse-go/v2"
@@ -11,7 +10,7 @@ import (
 )
 
 type Clickhouse struct {
-	conn driver.Conn
+	Conn driver.Conn
 }
 
 func New(cfg config.Clickhouse) (*Clickhouse, error) {
@@ -50,9 +49,9 @@ func New(cfg config.Clickhouse) (*Clickhouse, error) {
 		return nil, fmt.Errorf("failed to ping clickhouse: %w", err)
 	}
 
-	return &Clickhouse{conn}, nil
+	return &Clickhouse{Conn: conn}, nil
 }
 
 func (ch *Clickhouse) Close() error {
-	return ch.conn.Close()
+	return ch.Conn.Close()
 }

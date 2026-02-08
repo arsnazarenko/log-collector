@@ -114,16 +114,20 @@ func Run() {
 		rmq.Close()
 		s.Shutdown(ctx)
 	}()
-
+	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
+	defer cancel()
 	ch, err := clickhouse.New(cfg.Clickhouse)
 	if err != nil {
 		log.Fatalf("Error connecting to clickhouse: %s", err)
 	}
 	logRepo := persistent.NewLogClickhouseRepo(ch)
-	_ = logRepo
+	if err := logRepo.CreateTable(ctx); err != nil {
+		log.Fatalf("Clickhouse error: %s", err)
+	}
 	defer func() {
 		ch.Close()
 	}()
+	_ = logRepo
 
 	log.Printf("Server started on port %s", cfg.Port)
 	log.Fatal(s.ListenAndServe())

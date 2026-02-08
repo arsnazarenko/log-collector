@@ -40,6 +40,35 @@ func FromAPIInput(input gen.LogEntryInput) *repo.LogEntry {
 	}
 }
 
+func (r *LogClickhouseRepo) CreateTable(ctx context.Context) error {
+	const createTableQuery = `
+CREATE TABLE IF NOT EXISTS logs ON CLUSTER '{cluster}' (
+	id UUID DEFAULT generateUUIDv4(),
+	created_at DateTime,
+	received_at DateTime,
+	level LowCardinality(String),
+	source String,
+	host String,
+	environment LowCardinality(String),
+	message String,
+	user_id Nullable(UInt64),
+	duration_ms Nullable(UInt32),
+	http_status_code Nullable(UInt16),
+	error_type Nullable(String),
+	stack_trace Nullable(String)
+) ENGINE = ReplicatedMergeTree(
+	'/clickhouse/tables/logs',
+	'{replica}'
+)
+ORDER BY (created_at)
+PARTITION BY toYYYYMM(created_at);
+	`
+	if err := r.ch.Conn.Exec(ctx, createTableQuery); err != nil {
+		return fmt.Errorf("failed to create logs table: %w", err)
+	}
+	return nil
+}
+
 func (r *LogClickhouseRepo) Save(ctx context.Context, log repo.LogEntry) error {
 	const query = `
 		INSERT INTO logs (

@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"encoding/json"
 	"flag"
 	"log"
 	"net"
@@ -21,6 +22,8 @@ import (
 	oapi_middleware "github.com/oapi-codegen/nethttp-middleware"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 
+	"github.com/arsnazarenko/log-collector/internal/usecase"
+	log_usecase "github.com/arsnazarenko/log-collector/internal/usecase/log"
 	"github.com/arsnazarenko/log-collector/pkg/clickhouse"
 	rmq_consumer "github.com/arsnazarenko/log-collector/pkg/rabbitmq"
 	"github.com/wagslane/go-rabbitmq"
@@ -68,8 +71,21 @@ func Run() {
 		log.Fatalf("Error declaring queue: %s", err)
 	}
 
+	var logUsecase usecase.LogUsecase
+
 	rmq.Consume(func(d rabbitmq.Delivery) rabbitmq.Action {
-		log.Printf("Received new msg from RabbitMQ: %v", d)
+		var logInput gen.LogEntryInput
+		if err = json.Unmarshal(d.Body, &logInput); err != nil {
+			log.Printf("Failed to parse log entry from RabbitMQ: %v", err)
+			return rabbitmq.NackDiscard
+		}
+
+		if _, err = logUsecase.AddLogs(context.Background(), []gen.LogEntryInput{logInput}); err != nil {
+			log.Printf("Failed to save log from RabbitMQ: %v", err)
+			return rabbitmq.NackDiscard
+		}
+
+		log.Printf("Saved log from RabbitMQ: %s", logInput.Message)
 		return rabbitmq.Ack
 	})
 
@@ -89,8 +105,19 @@ func Run() {
 	r.Handle("/swagger/*", http.StripPrefix("/swagger/", http.FileServer(http.FS(gen.SwaggerUI))))
 	r.Handle("/metrics", promhttp.Handler())
 
-	// FIXME: create UseCase
-	serverImpl := v1.NewLogServer(nil)
+	ctx := context.Background()
+	ch, err := clickhouse.New(cfg.Clickhouse)
+	if err != nil {
+		log.Fatalf("Error connecting to clickhouse: %s", err)
+	}
+	defer ch.Close()
+	logRepo := persistent.NewLogClickhouseRepo(ch)
+	if err := logRepo.CreateTable(ctx); err != nil {
+		log.Fatalf("Clickhouse error: %s", err)
+	}
+
+	logUsecase = log_usecase.NewLogUsecase(logRepo)
+	serverImpl := v1.NewLogServer(logUsecase)
 	server := gen.NewStrictHandler(serverImpl, []gen.StrictMiddlewareFunc{})
 
 	r.Route("/", func(r chi.Router) {
@@ -114,20 +141,6 @@ func Run() {
 		rmq.Close()
 		s.Shutdown(ctx)
 	}()
-	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
-	defer cancel()
-	ch, err := clickhouse.New(cfg.Clickhouse)
-	if err != nil {
-		log.Fatalf("Error connecting to clickhouse: %s", err)
-	}
-	logRepo := persistent.NewLogClickhouseRepo(ch)
-	if err := logRepo.CreateTable(ctx); err != nil {
-		log.Fatalf("Clickhouse error: %s", err)
-	}
-	defer func() {
-		ch.Close()
-	}()
-	_ = logRepo
 
 	log.Printf("Server started on port %s", cfg.Port)
 	log.Fatal(s.ListenAndServe())

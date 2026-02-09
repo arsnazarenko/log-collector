@@ -16,29 +16,29 @@ type LogRepo interface {
 }
 
 type LogEntry struct {
-	ID             string
-	CreatedAt      time.Time
-	ReceivedAt     time.Time
-	Level          string
-	Source         string
-	Host           string
-	Environment    string
-	Message        string
-	UserID         *uint64
-	DurationMs     *uint32
-	HTTPStatusCode *uint16
-	ErrorType      *string
-	StackTrace     *string
+	ID             string    `db:"id"`
+	CreatedAt      time.Time `db:"created_at"`
+	ReceivedAt     time.Time `db:"received_at"`
+	Level          string    `db:"level"`
+	Source         string    `db:"source"`
+	Host           string    `db:"host"`
+	Environment    string    `db:"environment"`
+	Message        string    `db:"message"`
+	UserID         *uint64   `db:"user_id"`
+	DurationMs     *uint32   `db:"duration_ms"`
+	HTTPStatusCode *uint16   `db:"http_status_code"`
+	ErrorType      *string   `db:"error_type"`
+	StackTrace     *string   `db:"stack_trace"`
 }
 
 type SearchFilter struct {
-	Level       string
-	Source      string
-	Host        string
-	Environment string
-	Message     string
-	From        time.Time
-	To          time.Time
+	Level       *string
+	Source      *string
+	Host        *string
+	Environment *string
+	Message     *string
+	From        *time.Time
+	To          *time.Time
 	Limit       int
 	Offset      int
 }

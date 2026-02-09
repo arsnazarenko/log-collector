@@ -24,20 +24,25 @@ func NewLogClickhouseRepo(ch *clickhouse.Clickhouse) *LogClickhouseRepo {
 func FromAPIInput(input gen.LogEntryInput) *repo.LogEntry {
 	receivedAt := time.Now()
 
-	return &repo.LogEntry{
-		CreatedAt:      input.CreatedAt,
-		ReceivedAt:     receivedAt,
-		Level:          string(input.Level),
-		Source:         input.Source,
-		Host:           input.Host,
-		Environment:    string(input.Environment),
-		Message:        input.Message,
-		UserID:         input.Payload.UserId,
-		DurationMs:     input.Payload.DurationMs,
-		HTTPStatusCode: input.Payload.HttpStatusCode,
-		ErrorType:      input.Payload.ErrorType,
-		StackTrace:     input.Payload.StackTrace,
+	logEntry := &repo.LogEntry{
+		CreatedAt:   input.CreatedAt,
+		ReceivedAt:  receivedAt,
+		Level:       string(input.Level),
+		Source:      input.Source,
+		Host:        input.Host,
+		Environment: string(input.Environment),
+		Message:     input.Message,
 	}
+
+	if input.Payload != nil {
+		logEntry.UserID = input.Payload.UserId
+		logEntry.DurationMs = input.Payload.DurationMs
+		logEntry.HTTPStatusCode = input.Payload.HttpStatusCode
+		logEntry.ErrorType = input.Payload.ErrorType
+		logEntry.StackTrace = input.Payload.StackTrace
+	}
+
+	return logEntry
 }
 
 func (r *LogClickhouseRepo) CreateTable(ctx context.Context) error {
@@ -74,7 +79,7 @@ func (r *LogClickhouseRepo) Save(ctx context.Context, log repo.LogEntry) error {
 		INSERT INTO logs (
 			created_at, received_at, level, source, host, environment,
 			message, user_id, duration_ms, http_status_code, error_type, stack_trace
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`
 
 	if err := r.ch.Conn.Exec(ctx, query,
@@ -97,7 +102,7 @@ func (r *LogClickhouseRepo) SaveBatch(ctx context.Context, logs []repo.LogEntry)
 		INSERT INTO logs (
 			created_at, received_at, level, source, host, environment,
 			message, user_id, duration_ms, http_status_code, error_type, stack_trace
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`
 
 	batch, err := r.ch.Conn.PrepareBatch(ctx, query)
@@ -163,57 +168,102 @@ func (r *LogClickhouseRepo) Search(ctx context.Context, filter repo.SearchFilter
 	query := fmt.Sprintf(queryFormat, whereClause)
 	args = append(args, filter.Limit, filter.Offset)
 
-	var logs []repo.LogEntry
-	if err := r.ch.Conn.Select(ctx, &logs, query, args...); err != nil {
+	rows, err := r.ch.Conn.Query(ctx, query, args...)
+	if err != nil {
 		return nil, 0, fmt.Errorf("failed to search logs: %w", err)
+	}
+	defer rows.Close()
+
+	var logs []repo.LogEntry
+	for rows.Next() {
+		var (
+			id             string
+			createdAt      time.Time
+			receivedAt     time.Time
+			level          string
+			source         string
+			host           string
+			environment    string
+			message        string
+			userID         *uint64
+			durationMs     *uint32
+			httpStatusCode *uint16
+			errorType      *string
+			stackTrace     *string
+		)
+		if err := rows.Scan(
+			&id, &createdAt, &receivedAt, &level, &source, &host, &environment,
+			&message, &userID, &durationMs, &httpStatusCode, &errorType, &stackTrace,
+		); err != nil {
+			return nil, 0, fmt.Errorf("failed to scan log: %w", err)
+		}
+		logs = append(logs, repo.LogEntry{
+			ID:             id,
+			CreatedAt:      createdAt,
+			ReceivedAt:     receivedAt,
+			Level:          level,
+			Source:         source,
+			Host:           host,
+			Environment:    environment,
+			Message:        message,
+			UserID:         userID,
+			DurationMs:     durationMs,
+			HTTPStatusCode: httpStatusCode,
+			ErrorType:      errorType,
+			StackTrace:     stackTrace,
+		})
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, 0, fmt.Errorf("failed to iterate rows: %w", err)
 	}
 
 	countQuery := fmt.Sprintf("SELECT count() FROM logs %s", whereClause)
-	var total int
+	var total uint64
 	if err := r.ch.Conn.QueryRow(ctx, countQuery, args[:len(args)-2]...).Scan(&total); err != nil {
 		return logs, 0, fmt.Errorf("failed to count logs: %w", err)
 	}
 
-	return logs, total, nil
+	return logs, int(total), nil
 }
 
 func (r *LogClickhouseRepo) buildWhereClause(filter repo.SearchFilter) (string, []any) {
 	conditions := []string{}
 	args := []any{}
 
-	if filter.Level != "" {
+	if filter.Level != nil {
 		conditions = append(conditions, "level = ?")
-		args = append(args, filter.Level)
+		args = append(args, *filter.Level)
 	}
 
-	if filter.Source != "" {
+	if filter.Source != nil {
 		conditions = append(conditions, "source = ?")
-		args = append(args, filter.Source)
+		args = append(args, *filter.Source)
 	}
 
-	if filter.Host != "" {
+	if filter.Host != nil {
 		conditions = append(conditions, "host = ?")
-		args = append(args, filter.Host)
+		args = append(args, *filter.Host)
 	}
 
-	if filter.Environment != "" {
+	if filter.Environment != nil {
 		conditions = append(conditions, "environment = ?")
-		args = append(args, filter.Environment)
+		args = append(args, *filter.Environment)
 	}
 
-	if filter.Message != "" {
+	if filter.Message != nil {
 		conditions = append(conditions, "message LIKE ?")
-		args = append(args, "%"+filter.Message+"%")
+		args = append(args, "%"+*filter.Message+"%")
 	}
 
-	if !filter.From.IsZero() {
+	if filter.From != nil && !filter.From.IsZero() {
 		conditions = append(conditions, "created_at >= ?")
-		args = append(args, filter.From)
+		args = append(args, *filter.From)
 	}
 
-	if !filter.To.IsZero() {
+	if filter.To != nil && !filter.To.IsZero() {
 		conditions = append(conditions, "created_at <= ?")
-		args = append(args, filter.To)
+		args = append(args, *filter.To)
 	}
 
 	if len(conditions) == 0 {

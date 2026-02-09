@@ -8,6 +8,7 @@ import (
 
 	"github.com/arsnazarenko/log-collector/api/openapi/v1/gen"
 	"github.com/arsnazarenko/log-collector/internal/repo"
+	"github.com/arsnazarenko/log-collector/internal/util"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
@@ -96,7 +97,7 @@ func TestLogUsecase_AddLogs_Multiple(t *testing.T) {
 			Message:     "Error message",
 			Payload: &gen.LogPayload{
 				UserId:    &userID,
-				ErrorType: strPtr("TestError"),
+				ErrorType: util.ByPtr("TestError"),
 			},
 		},
 		{
@@ -198,8 +199,8 @@ func TestLogUsecase_SearchLogs_Success(t *testing.T) {
 		Level:       &level,
 		Environment: &env,
 		Message:     &message,
-		Limit:       intPtr(10),
-		Offset:      intPtr(0),
+		Limit:       util.ByPtr(10),
+		Offset:      util.ByPtr(0),
 	}
 
 	expectedLogs := []repo.LogEntry{
@@ -254,8 +255,8 @@ func TestLogUsecase_SearchLogs_AllParams(t *testing.T) {
 		Message:     &message,
 		From:        &from,
 		To:          &to,
-		Limit:       intPtr(50),
-		Offset:      intPtr(10),
+		Limit:       util.ByPtr(50),
+		Offset:      util.ByPtr(10),
 	}
 
 	mockRepo.On("Search", ctx, mock.MatchedBy(func(filter repo.SearchFilter) bool {
@@ -327,8 +328,8 @@ func TestLogUsecase_SearchLogs_WithHost(t *testing.T) {
 
 	params := gen.SearchLogsParams{
 		Host:   &host,
-		Limit:  intPtr(10),
-		Offset: intPtr(0),
+		Limit:  util.ByPtr(10),
+		Offset: util.ByPtr(0),
 	}
 
 	mockRepo.On("Search", ctx, mock.MatchedBy(func(filter repo.SearchFilter) bool {
@@ -354,12 +355,4 @@ func TestLogUsecase_UploadLogs_NotImplemented(t *testing.T) {
 	assert.Error(t, err)
 	assert.Equal(t, 0, count)
 	assert.Contains(t, err.Error(), "not implemented")
-}
-
-func strPtr(s string) *string {
-	return &s
-}
-
-func intPtr(i int) *int {
-	return &i
 }

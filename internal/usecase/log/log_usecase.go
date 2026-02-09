@@ -9,6 +9,7 @@ import (
 	"github.com/arsnazarenko/log-collector/internal/repo"
 	"github.com/arsnazarenko/log-collector/internal/repo/persistent"
 	"github.com/arsnazarenko/log-collector/internal/usecase"
+	"github.com/arsnazarenko/log-collector/internal/util"
 	"github.com/google/uuid"
 	"github.com/oapi-codegen/runtime/types"
 )
@@ -62,16 +63,30 @@ func (u *LogUsecaseImpl) SearchLogs(ctx context.Context, params gen.SearchLogsPa
 		environment = &s
 	}
 
+	var sortBy *string
+	if params.SortBy != nil {
+		s := string(*params.SortBy)
+		sortBy = &s
+	}
+
+	var sortOrder *string
+	if params.SortOrder != nil {
+		s := string(*params.SortOrder)
+		sortOrder = &s
+	}
+
 	filter := repo.SearchFilter{
 		Level:       level,
 		Source:      params.Source,
 		Host:        params.Host,
 		Environment: environment,
 		Message:     params.Message,
-		Limit:       intFromPtr(params.Limit, 100),
-		Offset:      intFromPtr(params.Offset, 0),
+		Limit:       util.GetOrDefault(params.Limit, repo.DefaultLimit),
+		Offset:      util.GetOrDefault(params.Offset, repo.DefaultOffset),
 		From:        params.From,
 		To:          params.To,
+		SortBy:      sortBy,
+		SortOrder:   sortOrder,
 	}
 
 	logs, total, err := u.logRepo.Search(ctx, filter)
@@ -122,11 +137,4 @@ func (u *LogUsecaseImpl) toGenLogPayload(log repo.LogEntry) *gen.LogPayload {
 		ErrorType:      log.ErrorType,
 		StackTrace:     log.StackTrace,
 	}
-}
-
-func intFromPtr(i *int, defaultValue int) int {
-	if i == nil {
-		return defaultValue
-	}
-	return *i
 }

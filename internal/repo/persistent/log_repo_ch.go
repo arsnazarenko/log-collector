@@ -153,6 +153,7 @@ func (r *LogClickhouseRepo) FindByID(ctx context.Context, id string) (repo.LogEn
 
 func (r *LogClickhouseRepo) Search(ctx context.Context, filter repo.SearchFilter) ([]repo.LogEntry, int, error) {
 	whereClause, args := r.buildWhereClause(filter)
+	orderByClause := r.buildOrderByClause(filter)
 
 	const queryFormat = `
 		SELECT
@@ -160,12 +161,12 @@ func (r *LogClickhouseRepo) Search(ctx context.Context, filter repo.SearchFilter
 			message, user_id, duration_ms, http_status_code, error_type, stack_trace
 		FROM logs
 		%s
-		ORDER BY created_at DESC
+		%s
 		LIMIT ?
 		OFFSET ?
 	`
 
-	query := fmt.Sprintf(queryFormat, whereClause)
+	query := fmt.Sprintf(queryFormat, whereClause, orderByClause)
 	args = append(args, filter.Limit, filter.Offset)
 
 	rows, err := r.ch.Conn.Query(ctx, query, args...)
@@ -176,42 +177,51 @@ func (r *LogClickhouseRepo) Search(ctx context.Context, filter repo.SearchFilter
 
 	var logs []repo.LogEntry
 	for rows.Next() {
-		var (
-			id             string
-			createdAt      time.Time
-			receivedAt     time.Time
-			level          string
-			source         string
-			host           string
-			environment    string
-			message        string
-			userID         *uint64
-			durationMs     *uint32
-			httpStatusCode *uint16
-			errorType      *string
-			stackTrace     *string
-		)
+		var rawValue repo.LogEntry
 		if err := rows.Scan(
-			&id, &createdAt, &receivedAt, &level, &source, &host, &environment,
-			&message, &userID, &durationMs, &httpStatusCode, &errorType, &stackTrace,
+			&rawValue.ID, &rawValue.CreatedAt, &rawValue.ReceivedAt, &rawValue.Level, &rawValue.Source, &rawValue.Host, &rawValue.Environment,
+			&rawValue.Message, &rawValue.UserID, &rawValue.DurationMs, &rawValue.HTTPStatusCode, &rawValue.ErrorType, &rawValue.StackTrace,
 		); err != nil {
 			return nil, 0, fmt.Errorf("failed to scan log: %w", err)
 		}
-		logs = append(logs, repo.LogEntry{
-			ID:             id,
-			CreatedAt:      createdAt,
-			ReceivedAt:     receivedAt,
-			Level:          level,
-			Source:         source,
-			Host:           host,
-			Environment:    environment,
-			Message:        message,
-			UserID:         userID,
-			DurationMs:     durationMs,
-			HTTPStatusCode: httpStatusCode,
-			ErrorType:      errorType,
-			StackTrace:     stackTrace,
-		})
+		logs = append(logs, rawValue)
+
+		// var (
+		// 	id             string
+		// 	createdAt      time.Time
+		// 	receivedAt     time.Time
+		// 	level          string
+		// 	source         string
+		// 	host           string
+		// 	environment    string
+		// 	message        string
+		// 	userID         *uint64
+		// 	durationMs     *uint32
+		// 	httpStatusCode *uint16
+		// 	errorType      *string
+		// 	stackTrace     *string
+		// )
+		// if err := rows.Scan(
+		// 	&id, &createdAt, &receivedAt, &level, &source, &host, &environment,
+		// 	&message, &userID, &durationMs, &httpStatusCode, &errorType, &stackTrace,
+		// ); err != nil {
+		// 	return nil, 0, fmt.Errorf("failed to scan log: %w", err)
+		// }
+		// logs = append(logs, repo.LogEntry{
+		// 	ID:             id,
+		// 	CreatedAt:      createdAt,
+		// 	ReceivedAt:     receivedAt,
+		// 	Level:          level,
+		// 	Source:         source,
+		// 	Host:           host,
+		// 	Environment:    environment,
+		// 	Message:        message,
+		// 	UserID:         userID,
+		// 	DurationMs:     durationMs,
+		// 	HTTPStatusCode: httpStatusCode,
+		// 	ErrorType:      errorType,
+		// 	StackTrace:     stackTrace,
+		// })
 	}
 
 	if err := rows.Err(); err != nil {
@@ -277,4 +287,22 @@ func (r *LogClickhouseRepo) buildWhereClause(filter repo.SearchFilter) (string, 
 	}
 
 	return whereClause.String(), args
+}
+
+func (r *LogClickhouseRepo) buildOrderByClause(filter repo.SearchFilter) string {
+	var sortBy string
+	if filter.SortBy != nil {
+		sortBy = *filter.SortBy
+	} else {
+		sortBy = repo.DefaultSortBy
+	}
+
+	var sortOrder string
+	if filter.SortOrder != nil {
+		sortOrder = *filter.SortOrder
+	} else {
+		sortOrder = repo.DefaultSortOrder
+	}
+
+	return fmt.Sprintf("ORDER BY %s %s", sortBy, sortOrder)
 }

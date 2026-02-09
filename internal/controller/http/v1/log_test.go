@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/arsnazarenko/log-collector/api/openapi/v1/gen"
+	"github.com/arsnazarenko/log-collector/internal/util"
 	"github.com/google/uuid"
 	openapi_types "github.com/oapi-codegen/runtime/types"
 	"github.com/stretchr/testify/assert"
@@ -66,7 +67,7 @@ func TestLogServerImpl_AddLogs_Success(t *testing.T) {
 			Payload: &gen.LogPayload{
 				UserId:         &userID,
 				HttpStatusCode: &httpStatus,
-				ErrorType:      strPtr("TestError"),
+				ErrorType:      util.ByPtr("TestError"),
 			},
 		},
 	}
@@ -184,8 +185,8 @@ func TestLogServerImpl_SearchLogs_Success(t *testing.T) {
 	params := gen.SearchLogsParams{
 		Level:       &level,
 		Environment: &env,
-		Limit:       intPtr(10),
-		Offset:      intPtr(0),
+		Limit:       util.ByPtr(10),
+		Offset:      util.ByPtr(0),
 	}
 
 	request := gen.SearchLogsRequestObject{
@@ -292,12 +293,4 @@ func TestLogServerImpl_UploadLogs_NotImplemented(t *testing.T) {
 	assert.Contains(t, *resp201.Message, "not implemented")
 	assert.NotNil(t, resp201.InsertedCount)
 	assert.Equal(t, 0, *resp201.InsertedCount)
-}
-
-func intPtr(i int) *int {
-	return &i
-}
-
-func strPtr(s string) *string {
-	return &s
 }

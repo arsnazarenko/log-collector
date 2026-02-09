@@ -8,6 +8,7 @@ import (
 
 	"github.com/arsnazarenko/log-collector/api/openapi/v1/gen"
 	"github.com/arsnazarenko/log-collector/internal/usecase"
+	"github.com/arsnazarenko/log-collector/internal/util"
 )
 
 var _ gen.StrictServerInterface = (*LogServerImpl)(nil)
@@ -38,7 +39,7 @@ func (l *LogServerImpl) AddLogs(ctx context.Context, request gen.AddLogsRequestO
 			InternalServerErrorJSONResponse: gen.InternalServerErrorJSONResponse{
 				Error:     "failed to add logs",
 				Details:   &details,
-				Timestamp: timePtr(time.Now()),
+				Timestamp: util.ByPtr(time.Now()),
 			},
 		}, nil
 	}
@@ -58,7 +59,7 @@ func (l *LogServerImpl) SearchLogs(ctx context.Context, request gen.SearchLogsRe
 			InternalServerErrorJSONResponse: gen.InternalServerErrorJSONResponse{
 				Error:     "failed to search logs",
 				Details:   &details,
-				Timestamp: timePtr(time.Now()),
+				Timestamp: util.ByPtr(time.Now()),
 			},
 		}, nil
 	}
@@ -84,12 +85,12 @@ func (l *LogServerImpl) UploadLogs(ctx context.Context, request gen.UploadLogsRe
 				},
 			}, nil
 		}
-		details := map[string]interface{}{"error": err.Error()}
+		details := map[string]any{"error": err.Error()}
 		return gen.UploadLogs500JSONResponse{
 			InternalServerErrorJSONResponse: gen.InternalServerErrorJSONResponse{
 				Error:     "failed to read multipart body",
 				Details:   &details,
-				Timestamp: timePtr(time.Now()),
+				Timestamp: util.ByPtr(time.Now()),
 			},
 		}, nil
 	}
@@ -100,8 +101,4 @@ func (l *LogServerImpl) UploadLogs(ctx context.Context, request gen.UploadLogsRe
 		Message:       &message,
 		InsertedCount: &count,
 	}, nil
-}
-
-func timePtr(t time.Time) *time.Time {
-	return &t
 }

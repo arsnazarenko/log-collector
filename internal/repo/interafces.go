@@ -8,6 +8,13 @@ import (
 
 var ErrLogNotFound = errors.New("log entry not found")
 
+const (
+	DefaultSortBy    = "created_at"
+	DefaultSortOrder = "DESC"
+	DefaultOffset    = 0
+	DefaultLimit     = 100
+)
+
 type LogRepo interface {
 	Save(ctx context.Context, log LogEntry) error
 	SaveBatch(ctx context.Context, logs []LogEntry) error
@@ -41,4 +48,6 @@ type SearchFilter struct {
 	To          *time.Time
 	Limit       int
 	Offset      int
+	SortBy      *string
+	SortOrder   *string
 }

@@ -1,0 +1,7 @@
+[
+  {"created_at":"2025-01-01T12:00:00Z","level":"error","source":"payment-service","host":"prod-server-01.com","environment":"production","message":"Payment processing failed","payload":{"user_id":1001,"http_status_code":504,"error_type":"TimeoutException"}},
+  {"created_at":"2025-01-01T12:00:05Z","level":"info","source":"auth-service","host":"prod-server-02.com","environment":"production","message":"User login successful"},
+  {"created_at":"2025-01-01T12:01:00Z","level":"warning","source":"cache-service","host":"prod-server-03.com","environment":"staging","message":"Cache miss for key user:1001"},
+  {"created_at":"2025-01-01T12:02:00Z","level":"critical","source":"database-service","host":"prod-server-04.com","environment":"production","message":"Database connection failed","payload":{"error_type":"ConnectionRefused"}},
+  {"created_at":"2025-01-01T12:03:00Z","level":"debug","source":"api-service","host":"prod-server-05.com","environment":"dev","message":"Debug info: request received"}
+]

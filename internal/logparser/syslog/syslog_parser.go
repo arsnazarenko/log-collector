@@ -141,7 +141,7 @@ func (s *SyslogParser) Parse(ctx context.Context, r io.Reader) ([]gen.LogEntryIn
 		lineNum++
 		line := scanner.Text()
 
-		log, err := s.ParseItem(line)
+		res, err := s.ParseItem(line)
 		if err != nil {
 			if errors.Is(err, logparser.ErrEmptyItem) {
 				continue
@@ -149,7 +149,7 @@ func (s *SyslogParser) Parse(ctx context.Context, r io.Reader) ([]gen.LogEntryIn
 				return nil, fmt.Errorf("line %d: %w", lineNum, err)
 			}
 		}
-		logs = append(logs, log)
+		logs = append(logs, res)
 	}
 
 	if err := scanner.Err(); err != nil {

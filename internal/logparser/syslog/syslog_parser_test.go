@@ -214,3 +214,39 @@ func TestSyslogParser_Parse_MissingRequiredField(t *testing.T) {
 	assert.Contains(t, err.Error(), "line 2")
 	assert.Contains(t, err.Error(), "hostname is required")
 }
+
+func TestSyslogParser_Parse_ValidMultipleValuesWithStructInfo(t *testing.T) {
+	parser := NewSyslogParser()
+	input := `
+<34>1 2025-01-01T12:00:00.003Z prod-server-01.com payment-service - - [user@1001 user_id="1001"] payment processing failed
+<46>1 2025-01-01T12:02:00.003Z prod-server-04.com database-service 128 987 [error@32473 error_type="connectionrefused"] database connection failed
+<34>1 2025-01-01T12:04:00.003Z prod-server-01.com payment-service - 123 [http@12345 http_status_code="504" duration_ms="5000"] external api timeout
+<30>1 2025-01-01T12:05:00.003Z prod-server-06.com user-service - - [user@1001 user_id="1002"] user profile fetched
+<11>1 2025-01-01T12:06:00.003Z prod-server-07.com security-service - - [security@9999 user_id="9999" error_type="unauthorizedaccess" stack_trace="at securitycheck()\\nat verifytoken()" duration_ms="10000"] authentication failed
+<31>1 2025-01-01T12:08:00.003Z prod-server-09.com analytics-service 123 - [analytics@555 duration_ms="1500"] report generation complete
+`
+	ctx := context.Background()
+	logs, err := parser.Parse(ctx, strings.NewReader(input))
+
+	require.NoError(t, err)
+	assert.Equal(t, 6, len(logs))
+}
+
+func TestSyslogParser_Parse_ValidMultipleValuesWithoutStructInfo(t *testing.T) {
+	parser := NewSyslogParser()
+	input := `
+<14>1 2025-01-01T12:00:05.003Z prod-server-02.com auth-service 123 321 - user login successful
+<22>1 2025-01-01T12:01:00.003Z prod-server-03.com cache-service - - - cache miss for key user:1001
+<23>1 2025-01-01T12:03:00.003Z prod-server-05.com api-service 123123 666 - debug info: request received
+<20>1 2025-01-01T12:07:00.003Z prod-server-08.com notification-service - 4890 - email sent to user@example.com
+<14>1 2025-01-01T12:00:05.003Z prod-server-02.com auth-service_1 - 321 - user login successful
+<22>1 2025-01-01T12:01:00.003Z prod-server-03.com cache-service_2 111 - - cache miss for key user:1001
+<23>1 2025-01-01T12:03:00.003Z prod-server-05.com api-service_3 - 123123 - debug info: request received
+<20>1 2025-01-01T12:07:00.003Z prod-server-08.com notification-service_4 12312 4890 - email sent to user@example.com
+`
+	ctx := context.Background()
+	logs, err := parser.Parse(ctx, strings.NewReader(input))
+
+	require.NoError(t, err)
+	assert.Equal(t, 8, len(logs))
+}

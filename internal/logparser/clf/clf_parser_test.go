@@ -28,7 +28,7 @@ func TestCLFParser_ParseLine_Success(t *testing.T) {
 
 	require.NoError(t, err)
 	assert.Equal(t, "192.168.1.100", log.Host)
-	assert.Equal(t, "web-server", log.Source)
+	assert.Equal(t, "", log.Source)
 	assert.Equal(t, gen.LogEntryInputLevelInfo, log.Level)
 	assert.Equal(t, "GET /api/users HTTP/1.1", log.Message)
 	assert.Equal(t, gen.LogEntryInputEnvironmentProduction, log.Environment)

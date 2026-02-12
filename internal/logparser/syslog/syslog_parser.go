@@ -11,6 +11,7 @@ import (
 
 	"github.com/arsnazarenko/log-collector/api/openapi/v1/gen"
 	"github.com/arsnazarenko/log-collector/internal/logparser"
+	"github.com/arsnazarenko/log-collector/internal/util"
 	"github.com/leodido/go-syslog/v4"
 	"github.com/leodido/go-syslog/v4/rfc5424"
 )
@@ -53,48 +54,36 @@ func (s *SyslogParser) ParseItem(line string) (gen.LogEntryInput, error) {
 		return gen.LogEntryInput{}, logparser.ErrEmptyItem
 	}
 
-	message, err := s.parser.Parse([]byte(line))
+	msg, err := s.parser.Parse([]byte(line))
 	if err != nil {
 		return gen.LogEntryInput{}, fmt.Errorf("%w: %v", logparser.ErrInvalidLogFormat, err)
 	}
 
-	if message == nil {
+	if msg == nil {
 		return gen.LogEntryInput{}, fmt.Errorf("%w: empty message", logparser.ErrInvalidLogFormat)
 	}
 
-	msg, ok := message.(*rfc5424.SyslogMessage)
+	rfcMsg, ok := msg.(*rfc5424.SyslogMessage)
 	if !ok {
 		return gen.LogEntryInput{}, fmt.Errorf("%w: unexpected message type", logparser.ErrInvalidLogFormat)
 	}
 
-	if msg.Timestamp == nil || msg.Timestamp.IsZero() {
+	if rfcMsg.Timestamp == nil || rfcMsg.Timestamp.IsZero() {
 		return gen.LogEntryInput{}, fmt.Errorf("%w: timestamp is required", logparser.ErrRequiredFieldMissing)
 	}
-	if msg.Hostname == nil || *msg.Hostname == "" || *msg.Hostname == "-" {
-		return gen.LogEntryInput{}, fmt.Errorf("%w: hostname is required", logparser.ErrRequiredFieldMissing)
-	}
-	if msg.Appname == nil || *msg.Appname == "" || *msg.Appname == "-" {
-		return gen.LogEntryInput{}, fmt.Errorf("%w: appname is required", logparser.ErrRequiredFieldMissing)
-	}
-	if msg.Message == nil || *msg.Message == "" {
-		return gen.LogEntryInput{}, fmt.Errorf("%w: message is required", logparser.ErrRequiredFieldMissing)
-	}
 
-	severity := uint8(0)
-	if msg.Severity != nil {
-		severity = *msg.Severity
-	}
+	severity := util.GetOrDefault(rfcMsg.Severity, uint8(0))
 
 	log := gen.LogEntryInput{
-		CreatedAt:   *msg.Timestamp,
-		Host:        *msg.Hostname,
-		Message:     *msg.Message,
-		Source:      *msg.Appname,
+		CreatedAt:   *rfcMsg.Timestamp,
+		Host:        util.GetOrDefault(rfcMsg.Hostname, ""),
+		Message:     util.GetOrDefault(rfcMsg.Message, ""),
+		Source:      util.GetOrDefault(rfcMsg.Appname, ""),
 		Environment: gen.LogEntryInputEnvironment(logparser.DefaultEnvironment),
 		Level:       s.severityToLevel(severity),
 	}
 
-	sd := msg.StructuredData
+	sd := rfcMsg.StructuredData
 	if sd != nil && len(*sd) > 0 {
 		var payload gen.LogPayload
 

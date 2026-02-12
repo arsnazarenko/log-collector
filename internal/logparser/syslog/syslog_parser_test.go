@@ -55,30 +55,40 @@ func TestSyslogParser_ParseLine_MissingHostname(t *testing.T) {
 	parser := NewSyslogParser()
 	line := `<34>1 2025-01-01T12:00:00.003Z - payment-service - - [user@1001 user_id="1001"] Payment processing failed`
 
+	log, err := parser.ParseItem(line)
+
+	require.NoError(t, err)
+	assert.Equal(t, log.Host, "")
+}
+
+func TestSyslogParser_ParseLine_MissingTimestamp(t *testing.T) {
+	parser := NewSyslogParser()
+	line := `<34>1 - prod-server-01 payment-service - - [user@1001 user_id="1001"] Payment processing failed`
+
 	_, err := parser.ParseItem(line)
 
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "hostname is required")
+	assert.Contains(t, err.Error(), "timestamp is required")
 }
 
 func TestSyslogParser_ParseLine_MissingAppname(t *testing.T) {
 	parser := NewSyslogParser()
 	line := `<34>1 2025-01-01T12:00:00.003Z prod-server-01.com - - - [user@1001 user_id="1001"] Payment processing failed`
 
-	_, err := parser.ParseItem(line)
+	log, err := parser.ParseItem(line)
 
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "appname is required")
+	require.NoError(t, err)
+	assert.Equal(t, log.Source, "")
 }
 
 func TestSyslogParser_ParseLine_MissingMessage(t *testing.T) {
 	parser := NewSyslogParser()
 	line := `<34>1 2025-01-01T12:00:00.003Z prod-server-01.com payment-service - - [user@1001 user_id="1001"]`
 
-	_, err := parser.ParseItem(line)
+	log, err := parser.ParseItem(line)
 
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "message is required")
+	require.NoError(t, err)
+	assert.Equal(t, log.Message, "")
 }
 
 func TestSyslogParser_ParseLine_InvalidFormat(t *testing.T) {
@@ -205,14 +215,14 @@ invalid syslog line
 func TestSyslogParser_Parse_MissingRequiredField(t *testing.T) {
 	parser := NewSyslogParser()
 	input := `<34>1 2025-01-01T12:00:00.003Z prod-server-01.com payment-service - - [user@1001 user_id="1001"] Payment processing failed
-<34>1 2025-01-01T12:00:00.003Z - payment-service - - [user@1001 user_id="1001"] Missing hostname`
+<34>1 - prod-server-01 payment-service - - [user@1001 user_id="1001"] Missing time`
 
 	ctx := context.Background()
 	_, err := parser.Parse(ctx, strings.NewReader(input))
 
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "line 2")
-	assert.Contains(t, err.Error(), "hostname is required")
+	assert.Contains(t, err.Error(), "timestamp is required")
 }
 
 func TestSyslogParser_Parse_ValidMultipleValuesWithStructInfo(t *testing.T) {

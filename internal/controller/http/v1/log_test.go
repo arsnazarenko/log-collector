@@ -376,7 +376,7 @@ func TestLogServerImpl_UploadLogs_CLF_Success(t *testing.T) {
 	reader := multipart.NewReader(&buf, writer.Boundary())
 
 	mockUC.On("AddLogs", ctx, mock.MatchedBy(func(logs []gen.LogEntryInput) bool {
-		return len(logs) == 1 && logs[0].Source == "web-server"
+		return len(logs) == 1 && logs[0].Source == ""
 	})).Return(1, nil)
 
 	request := gen.UploadLogsRequestObject{

@@ -17,7 +17,10 @@ import (
 
 var _ logparser.Parser = (*CLFParser)(nil)
 
-const clfPattern = `^(\S+) \S+ \S+ \[([^\]]+)\] "(\S+ \S+ \S+)" (\d{3}) (\d+|-)$`
+const (
+	clfPattern    = `^(\S+) \S+ \S+ \[([^\]]+)\] "(\S+ \S+ \S+)" (\d{3}) (\d+|-)$`
+	defaultSource = ""
+)
 
 var clfRegex = regexp.MustCompile(clfPattern)
 
@@ -73,7 +76,7 @@ func (c *CLFParser) ParseItem(line string) (gen.LogEntryInput, error) {
 		CreatedAt:   timestamp,
 		Host:        matches[1],
 		Message:     matches[3],
-		Source:      "web-server",
+		Source:      defaultSource,
 		Environment: gen.LogEntryInputEnvironment(logparser.DefaultEnvironment),
 		Level:       c.statusToLevel(statusCodePtr),
 		Payload: &gen.LogPayload{

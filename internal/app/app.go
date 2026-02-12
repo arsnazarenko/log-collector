@@ -95,33 +95,34 @@ func Run() {
 	})
 
 	s := &http.Server{
-		Handler: r,
-		Addr:    net.JoinHostPort(cfg.Host, cfg.Port),
+		Handler:           r,
+		Addr:              net.JoinHostPort(cfg.Host, cfg.Port),
+		ReadTimeout:       10 * time.Second,
+		WriteTimeout:      10 * time.Second,
+		IdleTimeout:       60 * time.Second,
+		ReadHeaderTimeout: 5 * time.Second,
 	}
 
-	rmq, err := rmq_consumer.New(cfg.RabbitMQ)
+	rmqConsumer, err := rmq_consumer.NewConsumer(cfg.RabbitMQ)
 	if err != nil {
 		log.Fatalf("Error connecting to rabbitmq: %s", err)
 	}
-	defer rmq.Close()
+	defer rmqConsumer.Close()
 
-	err = rmq.DeclareExchange()
-	if err != nil {
-		log.Fatalf("Error declaring exchange: %s", err)
-	}
-
-	err = rmq.DeclareQueue()
+	err = rmqConsumer.DeclareQueue()
 	if err != nil {
 		log.Fatalf("Error declaring queue: %s", err)
 	}
 	jsonParser := json_parser.NewJSONParser()
-	rmq.Consume(func(d rabbitmq.Delivery) rabbitmq.Action {
+	rmqConsumer.Consume(func(d rabbitmq.Delivery) rabbitmq.Action {
+		ctx, cancel := context.WithTimeout(context.Background(), time.Second*5)
+		defer cancel()
 		logInput, err := jsonParser.ParseItem(string(d.Body))
 		if err != nil {
 			log.Printf("Failed to parse log entry from RabbitMQ: %v", err)
 			return rabbitmq.NackDiscard
 		}
-		if err = logUsecase.AddLog(context.Background(), logInput); err != nil {
+		if err = logUsecase.AddLog(ctx, logInput); err != nil {
 			log.Printf("Failed to save log from RabbitMQ: %v", err)
 			return rabbitmq.NackDiscard
 		}
@@ -133,9 +134,10 @@ func Run() {
 		sigs := make(chan os.Signal, 1)
 		signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM)
 		<-sigs
-		ctx, cancel := context.WithTimeout(context.Background(), time.Second*3)
+		rmqConsumer.Close()
+
+		ctx, cancel := context.WithTimeout(context.Background(), time.Second*5)
 		defer cancel()
-		rmq.Close()
 		s.Shutdown(ctx)
 	}()
 

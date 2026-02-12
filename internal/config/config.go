@@ -30,6 +30,7 @@ type (
 		Username      string   `yaml:"username" env:"RABBITMQ_USERNAME"`
 		Password      string   `yaml:"password" env:"RABBITMQ_PASSWORD"`
 		QueueName     string   `yaml:"queue_name" env:"RABBITMQ_QUEUE_NAME"`
+		ExchangeName  string   `yaml:"exchange_name" env:"RABBITMQ_EXCHANGE_NAME"`
 		PrefetchCount int      `yaml:"prefetch_count" env:"RABBITMQ_PREFETCH_COUNT"`
 	}
 )

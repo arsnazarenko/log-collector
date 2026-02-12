@@ -1,0 +1,16 @@
+rabbitmq:
+  username: "guest"
+  password: "guest"
+  queue_name: "log-entries"
+  exchange_name: "logs"
+  prefetch_count: 10
+  brokers:
+    - "localhost:5672"
+    - "localhost:5673"
+    - "localhost:5674"
+
+generator:
+  timeout: "1s"
+  mode: "stdout"
+  format: "json"
+  count: 100000

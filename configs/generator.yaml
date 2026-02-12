@@ -1,0 +1,17 @@
+generator:
+  timeout: "1s"
+  mode: "rabbitmq"
+  format: "json"
+  count: 0
+
+rabbitmq:
+  username: "guest"
+  password: "guest"
+  queue_name: "log-entries"
+  exchange_name: "logs"
+  prefetch_count: 10
+  brokers:
+    - "rmq1:5672"
+    - "rmq2:5672"
+    - "rmq3:5672"
+

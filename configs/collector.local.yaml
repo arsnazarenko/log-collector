@@ -1,0 +1,24 @@
+http:
+  host: "127.0.0.1"
+  port: 8080
+
+clickhouse:
+  database: "default"
+  user: "default"
+  password: "default"
+  hosts:
+    - "localhost:9000"
+    - "localhost:9001"
+    - "localhost:9002"
+
+rabbitmq:
+  username: "guest"
+  password: "guest"
+  queue_name: "log-entries"
+  exchange_name: "logs"
+  prefetch_count: 10
+  brokers:
+    - "localhost:5672"
+    - "localhost:5673"
+    - "localhost:5674"
+

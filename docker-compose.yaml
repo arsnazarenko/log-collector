@@ -132,10 +132,29 @@ services:
       ch1:
         condition: service_started
 
+  generator:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.generator
+    container_name: generator
+    hostname: generator
+    environment:
+       GENERATOR_CONFIG_PATH: /etc/generator/config.yaml
+       # variables from config file can be overrided with env variables
+    volumes:
+      - ./configs/generator.yaml:/etc/generator/config.yaml:ro
+    depends_on:
+      rmq1:
+        condition: service_healthy
+      rmq2:
+        condition: service_healthy
+      rmq3:
+        condition: service_healthy
+
   collector:
     build:
       context: .
-      dockerfile: Dockerfile.collector
+      dockerfile: docker/Dockerfile.collector
     container_name: collector
     hostname: collector
     restart: always
@@ -144,7 +163,7 @@ services:
        # variables from config file can be overrided with env variables
        HTTP_PORT: 8080
     volumes:
-      - ./configs/config.yaml:/etc/collector/config.yaml:ro
+      - ./configs/collector.yaml:/etc/collector/config.yaml:ro
     ports:
       - '8080:8080'
     depends_on:

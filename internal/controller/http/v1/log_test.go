@@ -1,11 +1,10 @@
 package v1
 
 import (
+	"bytes"
 	"context"
 	"errors"
-	"io"
 	"mime/multipart"
-	"strings"
 	"testing"
 	"time"
 
@@ -35,9 +34,9 @@ func (m *MockLogUsecase) SearchLogs(ctx context.Context, params gen.SearchLogsPa
 	return args.Get(0).(*gen.SearchResult), args.Error(1)
 }
 
-func (m *MockLogUsecase) UploadLogs(ctx context.Context, file io.Reader, filename string) (int, error) {
-	args := m.Called(ctx, file, filename)
-	return args.Int(0), args.Error(1)
+func (m *MockLogUsecase) AddLog(ctx context.Context, log gen.LogEntryInput) error {
+	args := m.Called(ctx, log)
+	return args.Error(0)
 }
 
 func TestNewLogServer(t *testing.T) {
@@ -267,16 +266,81 @@ func TestLogServerImpl_UploadLogs_NilBody(t *testing.T) {
 	resp400, ok := response.(gen.UploadLogs400JSONResponse)
 	require.True(t, ok)
 	assert.Equal(t, "request body is required", resp400.Error)
-	mockUC.AssertNotCalled(t, "UploadLogs")
+	mockUC.AssertNotCalled(t, "AddLogs")
 }
 
-func TestLogServerImpl_UploadLogs_NotImplemented(t *testing.T) {
+func TestLogServerImpl_UploadLogs_NoFile(t *testing.T) {
 	ctx := context.Background()
 	mockUC := new(MockLogUsecase)
 	server := NewLogServer(mockUC)
 
-	body := strings.NewReader("--boundary\r\nContent-Disposition: form-data; name=\"file\"; filename=\"test.log\"\r\nContent-Type: text/plain\r\n\r\ntest log\r\n--boundary--\r\n")
-	reader := multipart.NewReader(body, "boundary")
+	var buf bytes.Buffer
+	writer := multipart.NewWriter(&buf)
+	writer.Close()
+
+	reader := multipart.NewReader(&buf, writer.Boundary())
+
+	request := gen.UploadLogsRequestObject{
+		Body: reader,
+	}
+
+	response, err := server.UploadLogs(ctx, request)
+
+	require.NoError(t, err)
+	assert.NotNil(t, response)
+
+	resp400, ok := response.(gen.UploadLogs400JSONResponse)
+	require.True(t, ok)
+	assert.Equal(t, "file is required", resp400.Error)
+	mockUC.AssertNotCalled(t, "AddLogs")
+}
+
+func TestLogServerImpl_UploadLogs_InvalidFormat(t *testing.T) {
+	ctx := context.Background()
+	mockUC := new(MockLogUsecase)
+	server := NewLogServer(mockUC)
+
+	var buf bytes.Buffer
+	writer := multipart.NewWriter(&buf)
+	part, _ := writer.CreateFormFile("file", "test.log")
+	part.Write([]byte("invalid log format"))
+	writer.Close()
+
+	reader := multipart.NewReader(&buf, writer.Boundary())
+
+	request := gen.UploadLogsRequestObject{
+		Body: reader,
+	}
+
+	response, err := server.UploadLogs(ctx, request)
+
+	require.NoError(t, err)
+	assert.NotNil(t, response)
+
+	resp500, ok := response.(gen.UploadLogs500JSONResponse)
+	require.True(t, ok)
+	assert.Equal(t, "failed to parse log file", resp500.Error)
+	mockUC.AssertNotCalled(t, "AddLogs")
+}
+
+func TestLogServerImpl_UploadLogs_JSON_Success(t *testing.T) {
+	ctx := context.Background()
+	mockUC := new(MockLogUsecase)
+	server := NewLogServer(mockUC)
+
+	jsonContent := `[{"created_at":"2025-01-01T12:00:00Z","level":"error","source":"test","host":"localhost","environment":"production","message":"test"}]`
+
+	var buf bytes.Buffer
+	writer := multipart.NewWriter(&buf)
+	part, _ := writer.CreateFormFile("file", "logs.json")
+	part.Write([]byte(jsonContent))
+	writer.Close()
+
+	reader := multipart.NewReader(&buf, writer.Boundary())
+
+	mockUC.On("AddLogs", ctx, mock.MatchedBy(func(logs []gen.LogEntryInput) bool {
+		return len(logs) == 1 && logs[0].Message == "test"
+	})).Return(1, nil)
 
 	request := gen.UploadLogsRequestObject{
 		Body: reader,
@@ -290,7 +354,114 @@ func TestLogServerImpl_UploadLogs_NotImplemented(t *testing.T) {
 	resp201, ok := response.(gen.UploadLogs201JSONResponse)
 	require.True(t, ok)
 	assert.NotNil(t, resp201.Message)
-	assert.Contains(t, *resp201.Message, "not implemented")
+	assert.Contains(t, *resp201.Message, "successfully")
 	assert.NotNil(t, resp201.InsertedCount)
-	assert.Equal(t, 0, *resp201.InsertedCount)
+	assert.Equal(t, 1, *resp201.InsertedCount)
+	mockUC.AssertExpectations(t)
+}
+
+func TestLogServerImpl_UploadLogs_CLF_Success(t *testing.T) {
+	ctx := context.Background()
+	mockUC := new(MockLogUsecase)
+	server := NewLogServer(mockUC)
+
+	clfContent := `192.168.1.100 - - [01/Jan/2025:12:00:00 +0000] "GET /api/users HTTP/1.1" 200 1234`
+
+	var buf bytes.Buffer
+	writer := multipart.NewWriter(&buf)
+	part, _ := writer.CreateFormFile("file", "logs.txt")
+	part.Write([]byte(clfContent))
+	writer.Close()
+
+	reader := multipart.NewReader(&buf, writer.Boundary())
+
+	mockUC.On("AddLogs", ctx, mock.MatchedBy(func(logs []gen.LogEntryInput) bool {
+		return len(logs) == 1 && logs[0].Source == "web-server"
+	})).Return(1, nil)
+
+	request := gen.UploadLogsRequestObject{
+		Body: reader,
+	}
+
+	response, err := server.UploadLogs(ctx, request)
+
+	require.NoError(t, err)
+	assert.NotNil(t, response)
+
+	resp201, ok := response.(gen.UploadLogs201JSONResponse)
+	require.True(t, ok)
+	assert.NotNil(t, resp201.Message)
+	assert.Contains(t, *resp201.Message, "successfully")
+	assert.NotNil(t, resp201.InsertedCount)
+	assert.Equal(t, 1, *resp201.InsertedCount)
+	mockUC.AssertExpectations(t)
+}
+
+func TestLogServerImpl_UploadLogs_Fallback_Success(t *testing.T) {
+	ctx := context.Background()
+	mockUC := new(MockLogUsecase)
+	server := NewLogServer(mockUC)
+
+	clfContent := `192.168.1.100 - - [01/Jan/2025:12:00:00 +0000] "GET /api/users HTTP/1.1" 200 1234`
+
+	var buf bytes.Buffer
+	writer := multipart.NewWriter(&buf)
+	part, _ := writer.CreateFormFile("file", "logs.unknown")
+	part.Write([]byte(clfContent))
+	writer.Close()
+
+	reader := multipart.NewReader(&buf, writer.Boundary())
+
+	mockUC.On("AddLogs", ctx, mock.MatchedBy(func(logs []gen.LogEntryInput) bool {
+		return len(logs) == 1
+	})).Return(1, nil)
+
+	request := gen.UploadLogsRequestObject{
+		Body: reader,
+	}
+
+	response, err := server.UploadLogs(ctx, request)
+
+	require.NoError(t, err)
+	assert.NotNil(t, response)
+
+	resp201, ok := response.(gen.UploadLogs201JSONResponse)
+	require.True(t, ok)
+	assert.NotNil(t, resp201.Message)
+	assert.Contains(t, *resp201.Message, "successfully")
+	assert.NotNil(t, resp201.InsertedCount)
+	assert.Equal(t, 1, *resp201.InsertedCount)
+	mockUC.AssertExpectations(t)
+}
+
+func TestLogServerImpl_UploadLogs_AddLogsError(t *testing.T) {
+	ctx := context.Background()
+	mockUC := new(MockLogUsecase)
+	server := NewLogServer(mockUC)
+
+	jsonContent := `[{"created_at":"2025-01-01T12:00:00Z","level":"error","source":"test","host":"localhost","environment":"production","message":"test"}]`
+
+	var buf bytes.Buffer
+	writer := multipart.NewWriter(&buf)
+	part, _ := writer.CreateFormFile("file", "logs.json")
+	part.Write([]byte(jsonContent))
+	writer.Close()
+
+	reader := multipart.NewReader(&buf, writer.Boundary())
+
+	mockUC.On("AddLogs", ctx, mock.Anything).Return(0, errors.New("database error"))
+
+	request := gen.UploadLogsRequestObject{
+		Body: reader,
+	}
+
+	response, err := server.UploadLogs(ctx, request)
+
+	require.NoError(t, err)
+	assert.NotNil(t, response)
+
+	resp500, ok := response.(gen.UploadLogs500JSONResponse)
+	require.True(t, ok)
+	assert.Equal(t, "failed to save logs", resp500.Error)
+	mockUC.AssertExpectations(t)
 }

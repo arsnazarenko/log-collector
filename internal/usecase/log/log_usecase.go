@@ -3,7 +3,6 @@ package log
 import (
 	"context"
 	"fmt"
-	"io"
 
 	"github.com/arsnazarenko/log-collector/api/openapi/v1/gen"
 	"github.com/arsnazarenko/log-collector/internal/repo"
@@ -24,6 +23,15 @@ func NewLogUsecase(logRepo repo.LogRepo) *LogUsecaseImpl {
 	return &LogUsecaseImpl{
 		logRepo: logRepo,
 	}
+}
+
+// AddLog implements [usecase.LogUsecase].
+func (u *LogUsecaseImpl) AddLog(ctx context.Context, log gen.LogEntryInput) error {
+	repoLog := persistent.FromAPIInput(log)
+	if err := u.logRepo.Save(ctx, *repoLog); err != nil {
+		return fmt.Errorf("failed to save log: %w", err)
+	}
+	return nil
 }
 
 func (u *LogUsecaseImpl) AddLogs(ctx context.Context, logs []gen.LogEntryInput) (int, error) {
@@ -104,10 +112,6 @@ func (u *LogUsecaseImpl) SearchLogs(ctx context.Context, params gen.SearchLogsPa
 	}
 
 	return result, nil
-}
-
-func (u *LogUsecaseImpl) UploadLogs(ctx context.Context, file io.Reader, filename string) (int, error) {
-	return 0, fmt.Errorf("file upload not implemented yet")
 }
 
 func (u *LogUsecaseImpl) toGenLogEntry(log repo.LogEntry) gen.LogEntry {

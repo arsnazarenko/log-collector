@@ -344,15 +344,3 @@ func TestLogUsecase_SearchLogs_WithHost(t *testing.T) {
 	assert.Equal(t, 0, result.Total)
 	mockRepo.AssertExpectations(t)
 }
-
-func TestLogUsecase_UploadLogs_NotImplemented(t *testing.T) {
-	ctx := context.Background()
-	mockRepo := new(MockLogRepo)
-	usecase := NewLogUsecase(mockRepo)
-
-	count, err := usecase.UploadLogs(ctx, nil, "test.log")
-
-	assert.Error(t, err)
-	assert.Equal(t, 0, count)
-	assert.Contains(t, err.Error(), "not implemented")
-}

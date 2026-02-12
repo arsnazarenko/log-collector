@@ -159,7 +159,17 @@ func (l *LogServerImpl) UploadLogs(ctx context.Context, request gen.UploadLogsRe
 		parser := getParserByExtension(filename)
 		if parser != nil {
 			logs, err = parser.Parse(ctx, bytes.NewReader(content.Bytes()))
-			if err == nil && len(logs) > 0 {
+			if err != nil {
+				details := map[string]any{"error": err.Error()}
+				return gen.UploadLogs500JSONResponse{
+					InternalServerErrorJSONResponse: gen.InternalServerErrorJSONResponse{
+						Error:     "failed to parse log file",
+						Details:   &details,
+						Timestamp: util.ByPtr(time.Now()),
+					},
+				}, nil
+
+			} else if len(logs) > 0 {
 				count, ucErr := l.logUC.AddLogs(ctx, logs)
 				if ucErr != nil {
 					details := map[string]any{"error": ucErr.Error()}

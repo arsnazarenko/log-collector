@@ -253,10 +253,11 @@ func TestSyslogParser_Parse_ValidMultipleValuesWithoutStructInfo(t *testing.T) {
 <22>1 2025-01-01T12:01:00.003Z prod-server-03.com cache-service_2 111 - - cache miss for key user:1001
 <23>1 2025-01-01T12:03:00.003Z prod-server-05.com api-service_3 - 123123 - debug info: request received
 <20>1 2025-01-01T12:07:00.003Z prod-server-08.com notification-service_4 12312 4890 - email sent to user@example.com
+<20>1 2025-01-01T12:07:00.003Z - notification-service_4 12312 4890 - email sent to user@example.com
 `
 	ctx := context.Background()
 	logs, err := parser.Parse(ctx, strings.NewReader(input))
 
 	require.NoError(t, err)
-	assert.Equal(t, 8, len(logs))
+	assert.Equal(t, 9, len(logs))
 }

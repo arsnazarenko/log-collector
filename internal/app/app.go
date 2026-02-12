@@ -2,7 +2,6 @@ package app
 
 import (
 	"context"
-	"encoding/json"
 	"flag"
 	"log"
 	"net"
@@ -15,10 +14,12 @@ import (
 	"github.com/arsnazarenko/log-collector/api/openapi/v1/gen"
 	"github.com/arsnazarenko/log-collector/internal/config"
 	v1 "github.com/arsnazarenko/log-collector/internal/controller/http/v1"
+	json_parser "github.com/arsnazarenko/log-collector/internal/logparser/json"
 	"github.com/arsnazarenko/log-collector/internal/repo/persistent"
 	log_usecase "github.com/arsnazarenko/log-collector/internal/usecase/log"
 	"github.com/arsnazarenko/log-collector/pkg/clickhouse"
 	rmq_consumer "github.com/arsnazarenko/log-collector/pkg/rabbitmq"
+
 	"github.com/go-chi/chi/middleware"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/cors"
@@ -53,7 +54,8 @@ func Run() {
 	}
 	swagger.Servers = nil
 
-	ctx := context.Background()
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
 	ch, err := clickhouse.New(cfg.Clickhouse)
 	if err != nil {
 		log.Fatalf("Error connecting to clickhouse: %s", err)
@@ -62,7 +64,7 @@ func Run() {
 
 	logRepo := persistent.NewLogClickhouseRepo(ch)
 	if err = logRepo.CreateTable(ctx); err != nil {
-		log.Fatalf("Clickhouse error: %s", err)
+		log.Fatalf("Clickhouse create table error: %s", err)
 	}
 
 	logUsecase := log_usecase.NewLogUsecase(logRepo)
@@ -112,19 +114,18 @@ func Run() {
 	if err != nil {
 		log.Fatalf("Error declaring queue: %s", err)
 	}
+	jsonParser := json_parser.NewJSONParser()
 	rmq.Consume(func(d rabbitmq.Delivery) rabbitmq.Action {
-		var logInput gen.LogEntryInput
-		if err = json.Unmarshal(d.Body, &logInput); err != nil {
+		logInput, err := jsonParser.ParseItem(string(d.Body))
+		if err != nil {
 			log.Printf("Failed to parse log entry from RabbitMQ: %v", err)
 			return rabbitmq.NackDiscard
 		}
-
-		if _, err = logUsecase.AddLogs(context.Background(), []gen.LogEntryInput{logInput}); err != nil {
+		if err = logUsecase.AddLog(context.Background(), logInput); err != nil {
 			log.Printf("Failed to save log from RabbitMQ: %v", err)
 			return rabbitmq.NackDiscard
 		}
-
-		log.Printf("Saved log from RabbitMQ: %s", logInput.Message)
+		log.Printf("Saved new log entry with MessageId: %v", d.MessageId)
 		return rabbitmq.Ack
 	})
 
@@ -132,7 +133,7 @@ func Run() {
 		sigs := make(chan os.Signal, 1)
 		signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM)
 		<-sigs
-		ctx, cancel := context.WithTimeout(context.Background(), time.Second*3) // if shutdown execure more than timeout => interrupt by context cancel()
+		ctx, cancel := context.WithTimeout(context.Background(), time.Second*3)
 		defer cancel()
 		rmq.Close()
 		s.Shutdown(ctx)

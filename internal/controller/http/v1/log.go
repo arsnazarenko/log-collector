@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"path/filepath"
 	"strings"
@@ -58,16 +59,20 @@ func (l *LogServerImpl) AddLogs(ctx context.Context, request gen.AddLogsRequestO
 	}, nil
 }
 
+func errTo500Response(err error, fmtStr string, v ...any) gen.InternalServerErrorJSONResponse {
+	details := map[string]any{"error": err.Error()}
+	return gen.InternalServerErrorJSONResponse{
+		Error:     fmt.Sprintf(fmtStr, v...),
+		Details:   &details,
+		Timestamp: util.ByPtr(time.Now()),
+	}
+}
+
 func (l *LogServerImpl) SearchLogs(ctx context.Context, request gen.SearchLogsRequestObject) (gen.SearchLogsResponseObject, error) {
 	result, err := l.logUC.SearchLogs(ctx, request.Params)
 	if err != nil {
-		details := map[string]any{"error": err.Error()}
 		return gen.SearchLogs500JSONResponse{
-			InternalServerErrorJSONResponse: gen.InternalServerErrorJSONResponse{
-				Error:     "failed to search logs",
-				Details:   &details,
-				Timestamp: util.ByPtr(time.Now()),
-			},
+			InternalServerErrorJSONResponse: errTo500Response(err, "failed to search logs"),
 		}, nil
 	}
 
@@ -130,13 +135,8 @@ func (l *LogServerImpl) UploadLogs(ctx context.Context, request gen.UploadLogsRe
 				},
 			}, nil
 		}
-		details := map[string]any{"error": err.Error()}
 		return gen.UploadLogs500JSONResponse{
-			InternalServerErrorJSONResponse: gen.InternalServerErrorJSONResponse{
-				Error:     "failed to read multipart body",
-				Details:   &details,
-				Timestamp: util.ByPtr(time.Now()),
-			},
+			InternalServerErrorJSONResponse: errTo500Response(err, "failed to read multipart body"),
 		}, nil
 	}
 
@@ -144,13 +144,8 @@ func (l *LogServerImpl) UploadLogs(ctx context.Context, request gen.UploadLogsRe
 
 	var content bytes.Buffer
 	if _, err = io.Copy(&content, part); err != nil {
-		details := map[string]any{"error": err.Error()}
 		return gen.UploadLogs500JSONResponse{
-			InternalServerErrorJSONResponse: gen.InternalServerErrorJSONResponse{
-				Error:     "failed to read file content",
-				Details:   &details,
-				Timestamp: util.ByPtr(time.Now()),
-			},
+			InternalServerErrorJSONResponse: errTo500Response(err, "failed to read file content"),
 		}, nil
 	}
 
@@ -160,25 +155,14 @@ func (l *LogServerImpl) UploadLogs(ctx context.Context, request gen.UploadLogsRe
 		if parser != nil {
 			logs, err = parser.Parse(ctx, bytes.NewReader(content.Bytes()))
 			if err != nil {
-				details := map[string]any{"error": err.Error()}
 				return gen.UploadLogs500JSONResponse{
-					InternalServerErrorJSONResponse: gen.InternalServerErrorJSONResponse{
-						Error:     "failed to parse log file",
-						Details:   &details,
-						Timestamp: util.ByPtr(time.Now()),
-					},
+					InternalServerErrorJSONResponse: errTo500Response(err, "failed to parse log file"),
 				}, nil
-
 			} else if len(logs) > 0 {
 				count, ucErr := l.logUC.AddLogs(ctx, logs)
 				if ucErr != nil {
-					details := map[string]any{"error": ucErr.Error()}
 					return gen.UploadLogs500JSONResponse{
-						InternalServerErrorJSONResponse: gen.InternalServerErrorJSONResponse{
-							Error:     "failed to save logs",
-							Details:   &details,
-							Timestamp: util.ByPtr(time.Now()),
-						},
+						InternalServerErrorJSONResponse: errTo500Response(ucErr, "failed to save logs"),
 					}, nil
 				}
 				message := "logs uploaded successfully"
@@ -192,25 +176,15 @@ func (l *LogServerImpl) UploadLogs(ctx context.Context, request gen.UploadLogsRe
 
 	logs, err = tryParseWithFallback(ctx, bytes.NewReader(content.Bytes()))
 	if err != nil {
-		details := map[string]any{"error": err.Error()}
 		return gen.UploadLogs500JSONResponse{
-			InternalServerErrorJSONResponse: gen.InternalServerErrorJSONResponse{
-				Error:     "failed to parse log file",
-				Details:   &details,
-				Timestamp: util.ByPtr(time.Now()),
-			},
+			InternalServerErrorJSONResponse: errTo500Response(err, "failed to parse log file"),
 		}, nil
 	}
 
 	count, err := l.logUC.AddLogs(ctx, logs)
 	if err != nil {
-		details := map[string]any{"error": err.Error()}
 		return gen.UploadLogs500JSONResponse{
-			InternalServerErrorJSONResponse: gen.InternalServerErrorJSONResponse{
-				Error:     "failed to save logs",
-				Details:   &details,
-				Timestamp: util.ByPtr(time.Now()),
-			},
+			InternalServerErrorJSONResponse: errTo500Response(err, "failed to save logs"),
 		}, nil
 	}
 

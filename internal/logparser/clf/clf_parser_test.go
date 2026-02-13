@@ -114,6 +114,16 @@ func TestCLFParser_ParseLine_MissingTimestamp(t *testing.T) {
 	assert.Contains(t, err.Error(), "invalid CLF format")
 }
 
+func TestCLFParser_ParseLine_MissingHostname(t *testing.T) {
+	parser := NewCLFParser()
+	line := `- - - [01/Jan/2025:12:00:00 +0000] "GET /api/users HTTP/1.1" 200 1234`
+
+	log, err := parser.ParseItem(line)
+
+	require.NoError(t, err)
+	assert.Equal(t, log.Host, "")
+}
+
 func TestCLFParser_ParseLine_InvalidTimestamp(t *testing.T) {
 	parser := NewCLFParser()
 	line := `192.168.1.100 - - [invalid-timestamp] "GET /api/users HTTP/1.1" 200 1234`

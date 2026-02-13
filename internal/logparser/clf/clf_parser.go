@@ -70,12 +70,20 @@ func (c *CLFParser) ParseItem(line string) (gen.LogEntryInput, error) {
 	if err != nil {
 		return gen.LogEntryInput{}, fmt.Errorf("%w: invalid status code: %v", logparser.ErrInvalidLogFormat, err)
 	}
+	host, message := matches[1], matches[3]
+
+	if host == "-" {
+		host = ""
+	}
+	if message == "-" {
+		message = ""
+	}
 
 	statusCodePtr := uint16(statusCode)
 	log := gen.LogEntryInput{
 		CreatedAt:   timestamp,
-		Host:        matches[1],
-		Message:     matches[3],
+		Host:        host,
+		Message:     message,
 		Source:      defaultSource,
 		Environment: gen.LogEntryInputEnvironment(logparser.DefaultEnvironment),
 		Level:       c.statusToLevel(statusCodePtr),

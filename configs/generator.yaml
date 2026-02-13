@@ -1,5 +1,5 @@
 generator:
-  timeout: "1s"
+  timeout: "0.5s"
   mode: "rabbitmq"
   format: "json"
   count: 0

@@ -27,15 +27,15 @@ func validateJSONLogEntry(log gen.LogEntryInput) error {
 	if log.CreatedAt.IsZero() {
 		return fmt.Errorf("%w: created_at is required", logparser.ErrRequiredFieldMissing)
 	}
-	if log.Host == "" {
-		return fmt.Errorf("%w: host is required", logparser.ErrRequiredFieldMissing)
-	}
-	if log.Message == "" {
-		return fmt.Errorf("%w: message is required", logparser.ErrRequiredFieldMissing)
-	}
-	if log.Source == "" {
-		return fmt.Errorf("%w: source is required", logparser.ErrRequiredFieldMissing)
-	}
+	// if log.Host == "" {
+	// 	return fmt.Errorf("%w: host is required", logparser.ErrRequiredFieldMissing)
+	// }
+	// if log.Message == "" {
+	// 	return fmt.Errorf("%w: message is required", logparser.ErrRequiredFieldMissing)
+	// }
+	// if log.Source == "" {
+	// 	return fmt.Errorf("%w: source is required", logparser.ErrRequiredFieldMissing)
+	// }
 
 	validLevels := map[gen.LogEntryInputLevel]bool{
 		gen.LogEntryInputLevelCritical: true,

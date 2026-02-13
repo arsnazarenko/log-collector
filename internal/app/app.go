@@ -126,7 +126,7 @@ func Run() {
 			log.Printf("Failed to save log from RabbitMQ: %v", err)
 			return rabbitmq.NackDiscard
 		}
-		log.Printf("Saved new log entry with MessageId: %v", d.MessageId)
+		log.Printf("Saved new log entry from: %s", d.Exchange)
 		return rabbitmq.Ack
 	})
 

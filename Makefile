@@ -21,19 +21,14 @@ build-generator:
 	@mkdir -p $(BUILD_DIR)
 	CGO_ENABLED=0 go build -o $(BUILD_DIR)/generator $(GENERATOR_CMD)
 
-run: build
-	./build/main
+run-collector-local: build-collector
+	./build/collector --config ./configs/collector.local.yaml
 
-docker-run:
-	docker compose up -d --build
 
-docker-stop:
-	docker compose down
-
-kill-generator:
-	docker kill generator
+run-generator-local: build-generator
+	./build/generator --config ./configs/generator.local.yaml
 
 clean:
 	rm -rf ./build ./api/openapi/v1/api.gen.go ./api/openapi/v1/gen/index.html
 
-.PHONY: all generate-api generate-swagger test clean build build-generator run clean
+.PHONY: all generate-api generate-swagger test clean build-collector build-generator run-collector-local run-generator-local clean

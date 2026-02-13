@@ -149,7 +149,6 @@ GET /logs/level=error&source=payment-service&from=2025-01-01T00:00:00Z&to=2025-0
 
 ### Требования
 - Go 1.25.6
-- Docker и Docker Compose (для запуска с контейнерами)
 
 ### Сборка и запуск
 
@@ -166,12 +165,14 @@ make build-collector
 # Сборка только generator
 make build-generator
 
-# Запуск всех сервисов в Docker (RabbitMQ, ClickHouse, Collector, Generator)
-make docker-run
+# Запуск collector с локальным когфигом
+make run-collector-local
 
-# Остановка всех сервисов
-make docker-stop
+# Запуск генератора с локальным конфигом
+make run-generator-local
 ```
+
+> Локальный запуск подразумевает, что на портах, указаных в локальном конфиге должны быть доступны clickhouse и rabbitmq
 
 ### Конфигурация
 
@@ -370,7 +371,6 @@ curl "http://localhost:8080/logs/search?level=error&source=payment-service&envir
 ## Метрики (Prometheus)
 
 Метрики доступны по адресу: http://localhost:8080/metrics
-
 
 - RPS приложения, response time, latency
 - Время парсинга логов (min, avg, max)

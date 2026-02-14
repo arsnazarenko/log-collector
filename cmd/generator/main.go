@@ -45,7 +45,7 @@ var (
 	paths        = []string{"/api/users", "/api/login", "/api/orders", "/api/products", "/api/health", "/api/nonexistent", "/api/slow", "/api/data", "/api/notifications"}
 	statusCodes  = []int{200, 201, 200, 200, 404, 500, 504, 403}
 	usernames    = []string{"alice", "bob", "charlie"}
-	errorTypes   = []string{"TimeoutException", "ConnectionRefused", "NullPointerException", "UnauthorizedAccess"}
+	errorTypes   = []string{"TimeoutException", "ConnectionRefused", "NullPointerException", "UnauthorizedAccess", "AccessDenied", "DividingBeZeroException", "ArrayIndexOutOfBounds", "CanceledByContext", "ThreadInterrupted", "IOException", "SQLException", "NilDeref", "InvalidArgument"}
 
 	messages = map[string][]string{
 		"debug":    {"Debug info: request received", "Processing data", "Checking cache", "Validating input"},

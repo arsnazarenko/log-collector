@@ -269,9 +269,6 @@ curl "http://localhost:8080/logs/search?level=error"
 # Поиск по источнику и времени
 curl "http://localhost:8080/logs/search?source=payment-service&from=2025-01-01T00:00:00Z&to=2025-01-02T00:00:00Z"
 
-# Поиск по тексту сообщения с пагинацией
-curl "http://localhost:8080/logs/search?message=failed&limit=10&offset=0"
-
 # Комплексный поиск
 curl "http://localhost:8080/logs/search?level=error&source=payment-service&environment=production&limit=50&offset=0&sort_by=created_at&sort_order=desc"
 ```

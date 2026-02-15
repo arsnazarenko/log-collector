@@ -15,6 +15,7 @@ import (
 	"github.com/arsnazarenko/log-collector/internal/logparser/clf"
 	"github.com/arsnazarenko/log-collector/internal/logparser/json"
 	"github.com/arsnazarenko/log-collector/internal/logparser/syslog"
+	"github.com/arsnazarenko/log-collector/internal/metrics"
 	"github.com/arsnazarenko/log-collector/internal/usecase"
 	"github.com/arsnazarenko/log-collector/internal/util"
 )
@@ -42,6 +43,7 @@ func (l *LogServerImpl) AddLogs(ctx context.Context, request gen.AddLogsRequestO
 
 	count, err := l.logUC.AddLogs(ctx, *request.Body)
 	if err != nil {
+		metrics.RecordLogsProcessed("http", "error", len(*request.Body))
 		details := map[string]any{"error": err.Error()}
 		return gen.AddLogs500JSONResponse{
 			InternalServerErrorJSONResponse: gen.InternalServerErrorJSONResponse{
@@ -52,6 +54,7 @@ func (l *LogServerImpl) AddLogs(ctx context.Context, request gen.AddLogsRequestO
 		}, nil
 	}
 
+	metrics.RecordLogsProcessed("http", "success", len(*request.Body))
 	message := "logs added successfully"
 	return gen.AddLogs201JSONResponse{
 		Message:       &message,
@@ -108,7 +111,10 @@ func tryParseWithFallback(ctx context.Context, file io.Reader) ([]gen.LogEntryIn
 			seeker.Seek(0, io.SeekStart)
 		}
 
+		observe := metrics.ObserveLogParsing(p.name, "http_upload", 0)
 		logs, err := p.parser.Parse(ctx, file)
+		observe()
+
 		if err == nil && len(logs) > 0 {
 			return logs, nil
 		}
@@ -153,7 +159,10 @@ func (l *LogServerImpl) UploadLogs(ctx context.Context, request gen.UploadLogsRe
 	if filename != "" {
 		parser := getParserByExtension(filename)
 		if parser != nil {
+			observe := metrics.ObserveLogParsing(parser.Name(), "http_upload", 0)
 			logs, err = parser.Parse(ctx, bytes.NewReader(content.Bytes()))
+			observe()
+
 			if err != nil {
 				return gen.UploadLogs500JSONResponse{
 					InternalServerErrorJSONResponse: errTo500Response(err, "failed to parse log file"),
@@ -161,10 +170,12 @@ func (l *LogServerImpl) UploadLogs(ctx context.Context, request gen.UploadLogsRe
 			} else if len(logs) > 0 {
 				count, ucErr := l.logUC.AddLogs(ctx, logs)
 				if ucErr != nil {
+					metrics.RecordLogsProcessed("http_upload", "error", len(logs))
 					return gen.UploadLogs500JSONResponse{
 						InternalServerErrorJSONResponse: errTo500Response(ucErr, "failed to save logs"),
 					}, nil
 				}
+				metrics.RecordLogsProcessed("http_upload", "success", len(logs))
 				message := "logs uploaded successfully"
 				return gen.UploadLogs201JSONResponse{
 					Message:       &message,
@@ -183,11 +194,13 @@ func (l *LogServerImpl) UploadLogs(ctx context.Context, request gen.UploadLogsRe
 
 	count, err := l.logUC.AddLogs(ctx, logs)
 	if err != nil {
+		metrics.RecordLogsProcessed("http_upload", "error", len(logs))
 		return gen.UploadLogs500JSONResponse{
 			InternalServerErrorJSONResponse: errTo500Response(err, "failed to save logs"),
 		}, nil
 	}
 
+	metrics.RecordLogsProcessed("http_upload", "success", len(logs))
 	message := "logs uploaded successfully"
 	return gen.UploadLogs201JSONResponse{
 		Message:       &message,

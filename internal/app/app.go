@@ -15,13 +15,15 @@ import (
 	"github.com/arsnazarenko/log-collector/internal/config"
 	v1 "github.com/arsnazarenko/log-collector/internal/controller/http/v1"
 	json_parser "github.com/arsnazarenko/log-collector/internal/logparser/json"
+	"github.com/arsnazarenko/log-collector/internal/metrics"
+	prometheus_middleware "github.com/arsnazarenko/log-collector/internal/middleware"
 	"github.com/arsnazarenko/log-collector/internal/repo/persistent"
 	log_usecase "github.com/arsnazarenko/log-collector/internal/usecase/log"
 	"github.com/arsnazarenko/log-collector/pkg/clickhouse"
 	rmq_consumer "github.com/arsnazarenko/log-collector/pkg/rabbitmq"
 
-	"github.com/go-chi/chi/middleware"
 	"github.com/go-chi/chi/v5"
+	"github.com/go-chi/chi/v5/middleware"
 	"github.com/go-chi/cors"
 	oapi_middleware "github.com/oapi-codegen/nethttp-middleware"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
@@ -62,6 +64,10 @@ func Run() {
 	}
 	defer ch.Close()
 
+	for _, host := range cfg.Hosts {
+		metrics.SetClickhouseStatus(host, true)
+	}
+
 	logRepo := persistent.NewLogClickhouseRepo(ch)
 	if err = logRepo.CreateTable(ctx); err != nil {
 		log.Fatalf("Clickhouse create table error: %s", err)
@@ -91,6 +97,7 @@ func Run() {
 		r.Use(oapi_middleware.OapiRequestValidator(swagger))
 		r.Use(middleware.Logger)
 		r.Use(middleware.Recoverer)
+		r.Use(prometheus_middleware.PrometheusHTTP)
 		gen.HandlerFromMux(server, r)
 	})
 
@@ -109,23 +116,39 @@ func Run() {
 	}
 	defer rmqConsumer.Close()
 
+	for _, broker := range cfg.Brokers {
+		metrics.SetRabbitmqStatus(broker, true)
+	}
+
 	err = rmqConsumer.DeclareQueue()
 	if err != nil {
 		log.Fatalf("Error declaring queue: %s", err)
 	}
 	jsonParser := json_parser.NewJSONParser()
 	rmqConsumer.Consume(func(d rabbitmq.Delivery) rabbitmq.Action {
+		observe := metrics.ObserveRabbitmqProcessing(cfg.QueueName)
+		defer observe()
+
 		ctx, cancel := context.WithTimeout(context.Background(), time.Second*5)
 		defer cancel()
+
+		parseObserve := metrics.ObserveLogParsing(jsonParser.Name(), "rabbitmq", 1)
 		logInput, err := jsonParser.ParseItem(string(d.Body))
+		parseObserve()
+
 		if err != nil {
+			metrics.RecordRabbitmqError(cfg.QueueName)
+			metrics.RecordLogsProcessed("rabbitmq", "error", 1)
 			log.Printf("Failed to parse log entry from RabbitMQ: %v", err)
 			return rabbitmq.NackDiscard
 		}
 		if err = logUsecase.AddLog(ctx, logInput); err != nil {
+			metrics.RecordRabbitmqError(cfg.QueueName)
+			metrics.RecordLogsProcessed("rabbitmq", "error", 1)
 			log.Printf("Failed to save log from RabbitMQ: %v", err)
 			return rabbitmq.NackDiscard
 		}
+		metrics.RecordLogsProcessed("rabbitmq", "success", 1)
 		log.Printf("Saved new log entry from: %s", d.Exchange)
 		return rabbitmq.Ack
 	})

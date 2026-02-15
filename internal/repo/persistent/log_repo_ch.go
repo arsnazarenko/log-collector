@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/arsnazarenko/log-collector/api/openapi/v1/gen"
+	"github.com/arsnazarenko/log-collector/internal/metrics"
 	"github.com/arsnazarenko/log-collector/internal/repo"
 	"github.com/arsnazarenko/log-collector/pkg/clickhouse"
 )
@@ -14,11 +15,12 @@ import (
 var _ repo.LogRepo = (*LogClickhouseRepo)(nil)
 
 type LogClickhouseRepo struct {
-	ch *clickhouse.Clickhouse
+	ch   *clickhouse.Clickhouse
+	host string
 }
 
 func NewLogClickhouseRepo(ch *clickhouse.Clickhouse) *LogClickhouseRepo {
-	return &LogClickhouseRepo{ch: ch}
+	return &LogClickhouseRepo{ch: ch, host: "default"}
 }
 
 func FromAPIInput(input gen.LogEntryInput) *repo.LogEntry {
@@ -82,11 +84,15 @@ func (r *LogClickhouseRepo) Save(ctx context.Context, log repo.LogEntry) error {
 		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`
 
-	if err := r.ch.Conn.Exec(ctx, query,
+	observe := metrics.ObserveClickhouseQuery("save", r.host)
+	err := r.ch.Conn.Exec(ctx, query,
 		log.CreatedAt, log.ReceivedAt, log.Level, log.Source,
 		log.Host, log.Environment, log.Message, log.UserID, log.DurationMs,
 		log.HTTPStatusCode, log.ErrorType, log.StackTrace,
-	); err != nil {
+	)
+	observe()
+
+	if err != nil {
 		return fmt.Errorf("failed to save log entry: %w", err)
 	}
 
@@ -105,6 +111,7 @@ func (r *LogClickhouseRepo) SaveBatch(ctx context.Context, logs []repo.LogEntry)
 		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`
 
+	observe := metrics.ObserveClickhouseQuery("save_batch", r.host)
 	batch, err := r.ch.Conn.PrepareBatch(ctx, query)
 	if err != nil {
 		return fmt.Errorf("failed to prepare batch: %w", err)
@@ -120,8 +127,10 @@ func (r *LogClickhouseRepo) SaveBatch(ctx context.Context, logs []repo.LogEntry)
 	}
 
 	if err := batch.Send(); err != nil {
+		observe()
 		return fmt.Errorf("failed to send batch: %w", err)
 	}
+	observe()
 
 	return nil
 }
@@ -169,8 +178,10 @@ func (r *LogClickhouseRepo) Search(ctx context.Context, filter repo.SearchFilter
 	query := fmt.Sprintf(queryFormat, whereClause, orderByClause)
 	args = append(args, filter.Limit, filter.Offset)
 
+	observe := metrics.ObserveClickhouseQuery("search", r.host)
 	rows, err := r.ch.Conn.Query(ctx, query, args...)
 	if err != nil {
+		observe()
 		return nil, 0, fmt.Errorf("failed to search logs: %w", err)
 	}
 	defer rows.Close()
@@ -182,57 +193,24 @@ func (r *LogClickhouseRepo) Search(ctx context.Context, filter repo.SearchFilter
 			&rawValue.ID, &rawValue.CreatedAt, &rawValue.ReceivedAt, &rawValue.Level, &rawValue.Source, &rawValue.Host, &rawValue.Environment,
 			&rawValue.Message, &rawValue.UserID, &rawValue.DurationMs, &rawValue.HTTPStatusCode, &rawValue.ErrorType, &rawValue.StackTrace,
 		); err != nil {
+			observe()
 			return nil, 0, fmt.Errorf("failed to scan log: %w", err)
 		}
 		logs = append(logs, rawValue)
-
-		// var (
-		// 	id             string
-		// 	createdAt      time.Time
-		// 	receivedAt     time.Time
-		// 	level          string
-		// 	source         string
-		// 	host           string
-		// 	environment    string
-		// 	message        string
-		// 	userID         *uint64
-		// 	durationMs     *uint32
-		// 	httpStatusCode *uint16
-		// 	errorType      *string
-		// 	stackTrace     *string
-		// )
-		// if err := rows.Scan(
-		// 	&id, &createdAt, &receivedAt, &level, &source, &host, &environment,
-		// 	&message, &userID, &durationMs, &httpStatusCode, &errorType, &stackTrace,
-		// ); err != nil {
-		// 	return nil, 0, fmt.Errorf("failed to scan log: %w", err)
-		// }
-		// logs = append(logs, repo.LogEntry{
-		// 	ID:             id,
-		// 	CreatedAt:      createdAt,
-		// 	ReceivedAt:     receivedAt,
-		// 	Level:          level,
-		// 	Source:         source,
-		// 	Host:           host,
-		// 	Environment:    environment,
-		// 	Message:        message,
-		// 	UserID:         userID,
-		// 	DurationMs:     durationMs,
-		// 	HTTPStatusCode: httpStatusCode,
-		// 	ErrorType:      errorType,
-		// 	StackTrace:     stackTrace,
-		// })
 	}
 
 	if err := rows.Err(); err != nil {
+		observe()
 		return nil, 0, fmt.Errorf("failed to iterate rows: %w", err)
 	}
 
 	countQuery := fmt.Sprintf("SELECT count() FROM logs %s", whereClause)
 	var total uint64
 	if err := r.ch.Conn.QueryRow(ctx, countQuery, args[:len(args)-2]...).Scan(&total); err != nil {
+		observe()
 		return logs, 0, fmt.Errorf("failed to count logs: %w", err)
 	}
+	observe()
 
 	return logs, int(total), nil
 }

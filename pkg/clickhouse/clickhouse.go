@@ -3,6 +3,8 @@ package clickhouse
 import (
 	"context"
 	"fmt"
+	"log/slog"
+	"os"
 
 	"github.com/ClickHouse/clickhouse-go/v2"
 	"github.com/ClickHouse/clickhouse-go/v2/lib/driver"
@@ -15,6 +17,7 @@ type Clickhouse struct {
 
 func New(cfg config.Clickhouse) (*Clickhouse, error) {
 	var (
+		logger    = slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelInfo}))
 		ctx       = context.Background()
 		conn, err = clickhouse.Open(&clickhouse.Options{
 			Addr: cfg.Hosts,
@@ -32,9 +35,7 @@ func New(cfg config.Clickhouse) (*Clickhouse, error) {
 				},
 			},
 			ConnOpenStrategy: clickhouse.ConnOpenRoundRobin,
-			// TLS: &tls.Config{
-			// 	InsecureSkipVerify: true,
-			// },
+			Logger:           logger,
 		})
 	)
 

@@ -3,6 +3,8 @@ package rabbitmq
 import (
 	"fmt"
 	"log"
+	"sync"
+	"time"
 
 	"github.com/arsnazarenko/log-collector/internal/config"
 	"github.com/wagslane/go-rabbitmq"
@@ -22,8 +24,12 @@ type RabbitConsumer struct {
 }
 
 type RabbitPublisher struct {
-	inner *rabbitmqInner
-	pub   *rabbitmq.Publisher
+	inner    *rabbitmqInner
+	pub      *rabbitmq.Publisher
+	mu       sync.RWMutex
+	healthy  bool
+	healthMu sync.RWMutex
+	config   config.RabbitMQ
 }
 
 func connect(cfg config.RabbitMQ) (*rabbitmqInner, error) {
@@ -110,39 +116,126 @@ func NewPublisher(cfg config.RabbitMQ) (*RabbitPublisher, error) {
 	}
 
 	return &RabbitPublisher{
-		inner: inner,
-		pub:   nil,
+		inner:   inner,
+		pub:     nil,
+		healthy: false,
+		config:  cfg,
 	}, nil
 }
 
 func (p *RabbitPublisher) DeclareExchange() error {
-	pub, err := rabbitmq.NewPublisher(
-		p.inner.conn,
-		rabbitmq.WithPublisherOptionsExchangeName(p.inner.config.ExchangeName),
-		rabbitmq.WithPublisherOptionsExchangeDeclare,
-		rabbitmq.WithPublisherOptionsExchangeKind("direct"),
-		rabbitmq.WithPublisherOptionsExchangeDurable,
-	)
-	if err != nil {
-		return fmt.Errorf("failed to declare exchange: %w", err)
+	return p.declareExchangeWithRetry(5, time.Second)
+}
+
+func (p *RabbitPublisher) declareExchangeWithRetry(maxRetries int, initialDelay time.Duration) error {
+	var lastErr error
+	delay := initialDelay
+
+	for i := range maxRetries {
+		pub, err := rabbitmq.NewPublisher(
+			p.inner.conn,
+			rabbitmq.WithPublisherOptionsExchangeName(p.inner.config.ExchangeName),
+			rabbitmq.WithPublisherOptionsExchangeDeclare,
+			rabbitmq.WithPublisherOptionsExchangeDurable,
+			rabbitmq.WithPublisherOptionsExchangeKind("direct"),
+		)
+		if err == nil {
+			p.mu.Lock()
+			p.pub = pub
+			p.setHealthy(true)
+			p.mu.Unlock()
+			log.Printf("Declared exchange: %s", p.inner.config.ExchangeName)
+			return nil
+		}
+		lastErr = err
+		log.Printf("Failed to declare exchange (attempt %d/%d): %v", i+1, maxRetries, err)
+
+		if i < maxRetries-1 {
+			log.Printf("Waiting %v before retry...", delay)
+			time.Sleep(delay)
+			delay *= 2
+		}
 	}
-	p.pub = pub
-	log.Printf("Declared exchange: %s", p.inner.config.ExchangeName)
+
+	p.setHealthy(false)
+	return fmt.Errorf("failed to declare exchange after %d attempts: %w", maxRetries, lastErr)
+}
+
+func (p *RabbitPublisher) isHealthy() bool {
+	p.healthMu.RLock()
+	defer p.healthMu.RUnlock()
+	return p.healthy
+}
+
+func (p *RabbitPublisher) setHealthy(healthy bool) {
+	p.healthMu.Lock()
+	defer p.healthMu.Unlock()
+	p.healthy = healthy
+}
+
+func (p *RabbitPublisher) Reconnect() error {
+	log.Printf("Attempting to reconnect and redeclare exchange...")
+
+	p.mu.Lock()
+	if p.pub != nil {
+		p.pub.Close()
+		p.pub = nil
+	}
+	p.mu.Unlock()
+
+	p.setHealthy(false)
+
+	err := p.declareExchangeWithRetry(5, time.Second)
+	if err != nil {
+		return fmt.Errorf("failed to reconnect: %w", err)
+	}
+
+	log.Printf("Successfully reconnected and redeclared exchange")
 	return nil
 }
 
 func (p *RabbitPublisher) Publish(message string) error {
-	return p.pub.Publish(
+	p.mu.RLock()
+	pub := p.pub
+	p.mu.RUnlock()
+
+	if pub == nil || !p.isHealthy() {
+		log.Printf("Publisher not healthy, attempting to reconnect...")
+		err := p.Reconnect()
+		if err != nil {
+			return fmt.Errorf("failed to reconnect before publish: %w", err)
+		}
+
+		p.mu.RLock()
+		pub = p.pub
+		p.mu.RUnlock()
+	}
+
+	err := pub.Publish(
 		[]byte(message),
 		[]string{"logs.entry"},
 		rabbitmq.WithPublishOptionsExchange(p.inner.config.ExchangeName),
+		rabbitmq.WithPublishOptionsPersistentDelivery,
 	)
+	if err != nil {
+		log.Printf("Publish failed with error: %v, marking publisher as unhealthy", err)
+		p.setHealthy(false)
+		return fmt.Errorf("publish failed: %w", err)
+	}
+
+	return nil
 }
 
 func (p *RabbitPublisher) Close() error {
+	p.mu.Lock()
 	if p.pub != nil {
 		p.pub.Close()
+		p.pub = nil
 	}
+	p.mu.Unlock()
+
+	p.setHealthy(false)
+
 	if p.inner.conn != nil {
 		return p.inner.conn.Close()
 	}

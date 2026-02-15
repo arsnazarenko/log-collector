@@ -355,6 +355,7 @@ func main() {
 	}()
 
 	count := 0
+	consecutiveErrors := 0
 	for {
 		if cfg.Count > 0 && count >= cfg.Count {
 			log.Printf("Generated %d logs. Stopping.", count)
@@ -383,6 +384,32 @@ func main() {
 			case "rabbitmq":
 				if err := publisher.Publish(logEntry); err != nil {
 					log.Printf("Failed to publish: %v", err)
+					consecutiveErrors++
+
+					if consecutiveErrors >= 5 {
+						log.Printf("Too many consecutive errors (%d), attempting to recreate publisher...", consecutiveErrors)
+
+						publisher.Close()
+						time.Sleep(2 * time.Second)
+
+						publisher, err = rabbitmq.NewPublisher(cfg.RabbitMQ)
+						if err != nil {
+							log.Printf("Failed to create new publisher: %v, will retry in 5s", err)
+							time.Sleep(5 * time.Second)
+							continue
+						}
+
+						if err := publisher.DeclareExchange(); err != nil {
+							log.Printf("Failed to declare exchange after recreation: %v, will retry in 5s", err)
+							time.Sleep(5 * time.Second)
+							continue
+						}
+
+						log.Printf("Successfully recreated publisher")
+						consecutiveErrors = 0
+					}
+				} else {
+					consecutiveErrors = 0
 				}
 			case "stdout":
 				fmt.Println(logEntry)
